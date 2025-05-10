@@ -9,7 +9,11 @@ import UIKit
 
 extension UIViewController {
     func showToast(message: String, duration: Double = 2.0) {
-        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: nil,
+            message: message,
+            preferredStyle: .alert
+        )
         self.present(alert, animated: true)
 
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) {

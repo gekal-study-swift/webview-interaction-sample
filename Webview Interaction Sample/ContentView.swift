@@ -9,8 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        WebViewContainer()
-                    .edgesIgnoringSafeArea(.all)
+        WebViewContainer().edgesIgnoringSafeArea(.all)
     }
 }
 
