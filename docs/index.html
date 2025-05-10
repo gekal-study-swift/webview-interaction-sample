@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WebView Example</title>
+</head>
+
+<body>
+    <h1>WebView Example</h1>
+    <button onclick="showToast()">Show Toast</button>
+
+    <p id="message"></p>
+
+    <script type="text/javascript">
+        function showToast() {
+            window.webkit.messageHandlers.iosListener.postMessage("Hello from WebView!");
+        }
+
+        function handleReturnValue(value) {
+            document.getElementById("message").innerText = "Received: " + value;
+        }
+    </script>
+</body>
+
+</html>
