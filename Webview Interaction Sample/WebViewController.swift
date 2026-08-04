@@ -7,6 +7,9 @@ final class WebViewController: UIViewController {
     private static let targetURL = URL(string: "https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=debug")!
     private static let unreachableURL = URL(string: "https://unreachable.invalid/")!
 
+    /// 配信元のホスト。これ以外のhttp(s)はアプリ内ブラウザで開く
+    private static let targetHost = targetURL.host
+
     /// WebViewで選ばれた配色をSwiftUI側に伝える。
     /// 配色の適用はSwiftUIのpreferredColorSchemeに一本化している（ContentViewを参照）
     var onAppThemeChanged: ((AppTheme) -> Void)?
@@ -16,6 +19,23 @@ final class WebViewController: UIViewController {
     private let errorView = UIStackView()
     private let errorDetailLabel = UILabel()
     private var callbackTasks: [String: DispatchWorkItem] = [:]
+
+    /// アプリ自身が読み込ませたURL。
+    ///
+    /// Androidの`loadUrl()`は`shouldOverrideUrlLoading`を通らないが、iOSは`decidePolicyFor`に来る。
+    /// これが無いと、エラー再現用の到達できないURLまで「外部リンク」と判定されてしまう。
+    private var appRequestedURL: URL?
+
+    private var state: LoadState = .loading {
+        didSet {
+            guard state != oldValue else { return }
+            render()
+        }
+    }
+
+    private var safariStyle: SafariStyle {
+        SafariStyle(barTintColor: WebPalette.surface, controlTintColor: WebPalette.primary)
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -166,29 +186,33 @@ final class WebViewController: UIViewController {
     }
 
     private func load(_ url: URL) {
-        showLoading()
+        appRequestedURL = url
+        state = LoadStateReducer.onLoadRequested()
         webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
     }
 
     @objc private func retry() { load(Self.targetURL) }
 
-    private func showLoading() {
-        errorView.isHidden = true
-        webView.isHidden = false
-        loadingIndicator.startAnimating()
-    }
+    private func render() {
+        switch state {
+        case .loading:
+            loadingIndicator.startAnimating()
+            errorView.isHidden = true
+            webView.isHidden = false
 
-    private func showLoaded() {
-        loadingIndicator.stopAnimating()
-        errorView.isHidden = true
-        webView.isHidden = false
-    }
+        case .loaded:
+            loadingIndicator.stopAnimating()
+            errorView.isHidden = true
+            webView.isHidden = false
 
-    private func showError(_ detail: String) {
-        loadingIndicator.stopAnimating()
-        errorDetailLabel.text = detail
-        errorView.isHidden = false
-        webView.isHidden = true
+        case .error(let detail):
+            loadingIndicator.stopAnimating()
+            errorDetailLabel.text = detail
+            errorView.isHidden = false
+            webView.isHidden = true
+            // エラー画面を出すときはWebViewを空にして、失敗したページを残さない
+            webView.load(URLRequest(url: LoadStateReducer.blankURL))
+        }
     }
 
     private func handleBridgeMessage(_ body: Any) {
@@ -202,8 +226,12 @@ final class WebViewController: UIViewController {
             showToast(message: message, duration: isLong ? 3.5 : 2)
             evaluate("window.handleReturnValue?.('Hello from iOS!')")
         case "openExternalLink":
-            guard let rawURL = args.first as? String, let url = safeWebURL(rawURL) else { return }
-            present(SFSafariViewController(url: url), animated: true)
+            guard let rawURL = args.first as? String else { return }
+            openExternalLink(
+                rawURL,
+                mode: ExternalOpenMode.from(args.dropFirst().first as? String),
+                style: safariStyle
+            )
         case "reloadPage": webView.reload()
         case "simulateLoadError": load(Self.unreachableURL)
         case "setAppTheme": onAppThemeChanged?(AppTheme.from(args.first as? String))
@@ -243,19 +271,6 @@ final class WebViewController: UIViewController {
     }
 
     private func evaluate(_ script: String) { webView.evaluateJavaScript(script) }
-
-    private func safeWebURL(_ rawValue: String) -> URL? {
-        guard let url = URL(string: rawValue), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
-        return url
-    }
-
-    private func openExternally(_ url: URL) {
-        if ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-            present(SFSafariViewController(url: url), animated: true)
-        } else if UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url)
-        }
-    }
 }
 
 extension WebViewController: WKScriptMessageHandler {
@@ -265,28 +280,73 @@ extension WebViewController: WKScriptMessageHandler {
 }
 
 extension WebViewController: WKNavigationDelegate {
-    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { showLoading() }
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        state = LoadStateReducer.onPageStarted(state, url: webView.url)
+    }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { showLoaded() }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        state = LoadStateReducer.onPageFinished(state, url: webView.url)
+    }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        showError(error.localizedDescription)
+        state = LoadStateReducer.onNavigationFailed(state, error: error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        showError(error.localizedDescription)
+        state = LoadStateReducer.onNavigationFailed(state, error: error)
     }
 
+    /// `tel:`や`mailto:`はWebViewが読み込めずエラーになるため、端末のアプリに渡す。
+    /// http(s)でも配信元と異なるホストはアプリ内ブラウザで開く。
+    /// WebView内で遷移させるとURLが見えないうえ戻る手段がなく、デモページに戻れなくなるため。
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
         guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
-        let targetHost = Self.targetURL.host?.lowercased()
-        let isWeb = ["http", "https"].contains(url.scheme?.lowercased() ?? "")
-        let isSameHost = isWeb && url.host?.lowercased() == targetHost
-        if isSameHost { decisionHandler(.allow) } else { decisionHandler(.cancel); openExternally(url) }
+
+        // アプリ自身が読み込ませたURL（初回・再試行・エラー再現・空ページ）はリンク遷移ではない
+        if url == appRequestedURL || url == LoadStateReducer.blankURL {
+            decisionHandler(.allow)
+            return
+        }
+
+        switch LinkPolicy.resolve(scheme: url.scheme, host: url.host, targetHost: Self.targetHost) {
+        case .inWebView:
+            decisionHandler(.allow)
+
+        case .safariViewController:
+            decisionHandler(.cancel)
+            openExternalLink(url.absoluteString, mode: .customTab, style: safariStyle)
+
+        case .externalApp:
+            decisionHandler(.cancel)
+            openWithExternalApp(url)
+        }
+    }
+
+    /// HTTPエラーは`didFail`に来ないため、レスポンスを見てエラー画面に切り替える。
+    /// サブフレーム（画像やiframeなど）の失敗ではエラー画面を出さない。
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationResponse: WKNavigationResponse,
+        decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
+    ) {
+        guard navigationResponse.isForMainFrame,
+              let response = navigationResponse.response as? HTTPURLResponse,
+              response.statusCode >= 400
+        else {
+            decisionHandler(.allow)
+            return
+        }
+
+        decisionHandler(.cancel)
+        state = LoadStateReducer.onHTTPError(
+            state,
+            isForMainFrame: navigationResponse.isForMainFrame,
+            statusCode: response.statusCode
+        )
     }
 }
 
@@ -297,7 +357,11 @@ extension WebViewController: WKUIDelegate {
         for navigationAction: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        if let url = navigationAction.request.url { openExternally(url) }
+        // window.open()はdecidePolicyForを通らないため、ここで受け取って
+        // 通常のリンクと同じ経路（アプリ内ブラウザ / 外部アプリ）に流す
+        if let url = navigationAction.request.url {
+            openExternalLink(url.absoluteString, mode: .customTab, style: safariStyle)
+        }
         return nil
     }
 }

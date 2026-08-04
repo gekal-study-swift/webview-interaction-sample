@@ -47,6 +47,16 @@ enum WebPalette {
     static let background = UIColor { traits in
         traits.userInterfaceStyle == .dark ? UIColor(hex: 0x0E1414) : UIColor(hex: 0xF2F6F5)
     }
+
+    /// web/app/theme.tsのbackground.paper
+    static let surface = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(hex: 0x161D1D) : UIColor(hex: 0xFFFFFF)
+    }
+
+    /// web/app/theme.tsのprimary.main
+    static let primary = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(hex: 0x5FD4C0) : UIColor(hex: 0x00695F)
+    }
 }
 
 private extension UIColor {

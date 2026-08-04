@@ -15,6 +15,25 @@ Android 版と同じ Web ページおよび JavaScript Bridge API を WKWebView 
 - リロード、読込エラー表示、再試行
 - 同一ホスト内遷移と外部リンクの安全な振り分け
 
+## 外部リンクの開き方
+
+Webページは Android 版と同じモード名（`ExternalOpenMode`）を渡してきます。
+iOS に同じ仕組みが無いものは、最も近い挙動に読み替えています。
+
+| モード | Android | iOS |
+| --- | --- | --- |
+| `IN_APP_OVERLAY` | 2つ目の WebView を重ねる | 2つ目の WKWebView を重ねる（`InAppBrowserViewController`） |
+| `CUSTOM_TAB` | Custom Tabs（全画面） | `SFSafariViewController`（全画面） |
+| `PARTIAL_CUSTOM_TAB` | Custom Tabs（ボトムシート） | `SFSafariViewController` をシート表示（`.medium()`） |
+| `WARMED_CUSTOM_TAB` | `warmup()` + `mayLaunchUrl()` | `SFSafariViewController.prewarmConnections(to:)` |
+| `APP_LINK` | `FLAG_ACTIVITY_REQUIRE_NON_BROWSER` | Universal Links（`universalLinksOnly`）、失敗時は Safari |
+| `BROWSER_CHOOSER` | `Intent.createChooser()` | 共有シート（`UIActivityViewController`） |
+| `NEW_DOCUMENT` | `FLAG_ACTIVITY_NEW_DOCUMENT` | 既定ブラウザを別アプリとして開く |
+| `INTENT_URI` | `Intent.parseUri()` | 相当なし。`S.browser_fallback_url` だけを開く |
+| `TRUSTED_WEB_ACTIVITY` | TWA | 相当なし。Safari で開く |
+
+判定ロジックは `LinkPolicy.swift`、起動は `ExternalLinkOpener.swift` にあります。
+
 ## Web画面
 
 Android版と同じNext.js + MUIの実装を `/web` に配置しています。
