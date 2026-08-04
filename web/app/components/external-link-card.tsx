@@ -89,9 +89,10 @@ const MODES: OpenMode[] = [
   {
     mode: 'TRUSTED_WEB_ACTIVITY',
     label: 'Trusted Web Activity',
-    detail: '専用ページを開き、TWA として表示されているかをページ側が判定して見せる',
+    detail: '専用ページを開き、どこで表示されているかをページ側が判定して見せる',
     url: OWN_SITE_URL,
-    caution: '署名証明書が assetlinks.json の登録と一致しないと、通常の Custom Tabs 表示に落ちます',
+    caution:
+      'iOS に TWA（URL バーを隠す仕組み）はありません。SFSafariViewController で開くため URL バーは出たままです',
   },
 ];
 

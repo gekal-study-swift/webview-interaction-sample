@@ -15,30 +15,64 @@ import Typography from '@mui/material/Typography';
 import { monoFontFamily } from '../theme';
 
 interface Detection {
-  /** TWA / PWA として起動されると Chrome が standalone にする。 */
+  /** ホーム画面に追加した PWA として起動されると true になる。 */
   standalone: boolean;
-  /** TWA からの起動では `android-app://<パッケージ名>` になる。 */
-  referrer: string;
+  /** UA に `Safari/` が無ければ WKWebView（アプリ内表示）。 */
+  webView: boolean;
+  /** アプリがブリッジを注入しているか。注入されるのはメインの WebView だけ。 */
+  bridge: boolean;
   origin: string;
   path: string;
   userAgent: string;
 }
 
-/** `android-app://` から起動元のパッケージ名を取り出す。 */
-const packageFromReferrer = (referrer: string) =>
-  referrer.startsWith('android-app://') ? referrer.replace('android-app://', '').replace(/\/$/, '') : null;
+/**
+ * Safari と WKWebView の判別。
+ *
+ * Safari と SFSafariViewController の UA には `Version/x.y … Safari/604.1` が付くが、
+ * WKWebView の UA は `Mobile/15E148` で終わり `Safari/` を含まない。
+ */
+const isWebViewUserAgent = (userAgent: string) => !/Safari\//.test(userAgent);
+
+/** このページの表示のされ方。iOS で取りうる 3 通り。 */
+type Surface = 'app-webview' | 'in-app-overlay' | 'safari';
+
+function detectSurface(detection: Detection): Surface {
+  if (detection.bridge) return 'app-webview';
+  return detection.webView ? 'in-app-overlay' : 'safari';
+}
+
+const SURFACE_TEXT: Record<Surface, { title: string; body: string; severity: 'success' | 'info' }> = {
+  'app-webview': {
+    title: 'アプリのメイン WebView で表示中',
+    body: 'アプリが注入したブリッジ（AndroidInterface）を検出しました。デモ画面と同じ WebView です。',
+    severity: 'success',
+  },
+  'in-app-overlay': {
+    title: 'アプリ内オーバーレイで表示中',
+    body: 'ブリッジは無く、UA は WKWebView のものです。アプリが重ねて表示している 2 つ目の WebView で、URL バーはありません。',
+    severity: 'success',
+  },
+  safari: {
+    title: 'Safari / SFSafariViewController での表示',
+    body: '上部に URL バーがあるはずです。iOS では SFSafariViewController の URL バーを隠せないため、TWA のような全画面表示にはなりません。',
+    severity: 'info',
+  },
+};
 
 export function TwaStatus() {
   const [detection, setDetection] = useState<Detection | null>(null);
 
   // window 依存の値は SSR と一致しないため、マウント後に取得する
   useEffect(() => {
+    const userAgent = window.navigator.userAgent;
     setDetection({
       standalone: window.matchMedia('(display-mode: standalone)').matches,
-      referrer: document.referrer,
+      webView: isWebViewUserAgent(userAgent),
+      bridge: Boolean(window.AndroidInterface),
       origin: window.location.origin,
       path: window.location.pathname,
-      userAgent: window.navigator.userAgent,
+      userAgent,
     });
   }, []);
 
@@ -46,25 +80,14 @@ export function TwaStatus() {
     return <Skeleton variant="rounded" height={220} />;
   }
 
-  const launcher = packageFromReferrer(detection.referrer);
-  // 2 つとも満たしていれば、検証を通った TWA として全画面表示されている
-  const verified = detection.standalone && launcher !== null;
+  const surface = detectSurface(detection);
+  const text = SURFACE_TEXT[surface];
 
   return (
     <Stack spacing={3}>
-      <Alert severity={verified ? 'success' : 'info'} variant="outlined">
-        <AlertTitle>{verified ? '検証済みの TWA として表示中' : 'TWA としては表示されていません'}</AlertTitle>
-        {verified ? (
-          <>
-            URL バーのない全画面で開かれています。このページのオリジンとアプリの署名が Digital Asset Links
-            で結び付いていることを Chrome が確認できた状態です。
-          </>
-        ) : (
-          <>
-            通常のブラウザ / Custom Tabs での表示です。上部に URL バーがあるはずです。 アプリの「Trusted Web
-            Activity」ボタンから開くと、検証が通っていれば URL バーが消えます。
-          </>
-        )}
+      <Alert severity={text.severity} variant="outlined">
+        <AlertTitle>{text.title}</AlertTitle>
+        {text.body}
       </Alert>
 
       <Box>
@@ -74,27 +97,32 @@ export function TwaStatus() {
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack spacing={1.5}>
             <Detected
-              label="display-mode: standalone"
-              ok={detection.standalone}
-              value={detection.standalone ? 'true' : 'false'}
-              hint="TWA / PWA として起動されると true になる"
+              label="window.AndroidInterface"
+              ok={detection.bridge}
+              value={detection.bridge ? 'あり' : 'なし'}
+              hint="アプリがブリッジを注入するのはメインの WebView だけ"
             />
             <Divider />
             <Detected
-              label="document.referrer"
-              ok={launcher !== null}
-              value={detection.referrer || '(空)'}
-              hint="TWA からの起動では android-app://<パッケージ名> になる"
+              label="UA に Safari/ を含まない"
+              ok={detection.webView}
+              value={detection.webView ? 'true' : 'false'}
+              hint="WKWebView の UA は Mobile/15E148 で終わり、Safari/ が付かない"
             />
-            {launcher && (
-              <Chip
-                size="small"
-                color="success"
-                variant="outlined"
-                label={`起動元: ${launcher}`}
-                sx={{ alignSelf: 'flex-start' }}
-              />
-            )}
+            <Divider />
+            <Detected
+              label="display-mode: standalone"
+              ok={detection.standalone}
+              value={detection.standalone ? 'true' : 'false'}
+              hint="ホーム画面に追加した PWA として起動すると true になる"
+            />
+            <Chip
+              size="small"
+              color={surface === 'safari' ? 'default' : 'success'}
+              variant="outlined"
+              label={`判定: ${text.title}`}
+              sx={{ alignSelf: 'flex-start' }}
+            />
           </Stack>
         </Paper>
       </Box>
@@ -113,11 +141,13 @@ export function TwaStatus() {
 
       <Box>
         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-          検証の仕組み
+          サイトとアプリを結び付ける仕組み
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          TWA で URL バーが隠れるには、サイトとアプリが互いを指し示している必要があります。 片方でも欠けると Chrome は
-          URL バーを表示したままにします（偽装を防ぐための仕様です）。
+          Android の Trusted Web Activity は、サイトとアプリが互いを指し示していることを Chrome
+          が確認できたときだけ URL バーを隠します。iOS に URL バーを隠す仕組みはありませんが、
+          「サイトとアプリが同じ持ち主であることを確認する」部分は Universal Links が担っています。
+          検証が通ると、他のアプリからこのサイトのリンクを開いたときに Safari ではなくアプリが起動します。
         </Typography>
         <Stack spacing={1}>
           <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -125,10 +155,10 @@ export function TwaStatus() {
               サイト側
             </Typography>
             <Typography variant="body2" sx={{ fontFamily: monoFontFamily, wordBreak: 'break-all' }}>
-              <Link href="/.well-known/assetlinks.json">/.well-known/assetlinks.json</Link>
+              <Link href="/.well-known/apple-app-site-association">/.well-known/apple-app-site-association</Link>
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              パッケージ名と署名証明書の SHA-256 を登録
+              Team ID と Bundle ID を登録（Android の assetlinks.json に相当）
             </Typography>
           </Paper>
           <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -136,10 +166,10 @@ export function TwaStatus() {
               アプリ側
             </Typography>
             <Typography variant="body2" sx={{ fontFamily: monoFontFamily, wordBreak: 'break-all' }}>
-              AndroidManifest.xml の asset_statements
+              Associated Domains エンタイトルメント
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              このページのオリジンを宣言
+              このページのオリジンを applinks: で宣言。有料の Apple Developer Program が必要
             </Typography>
           </Paper>
         </Stack>
