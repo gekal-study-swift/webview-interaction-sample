@@ -7,6 +7,10 @@ final class WebViewController: UIViewController {
     private static let targetURL = URL(string: "https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=debug")!
     private static let unreachableURL = URL(string: "https://unreachable.invalid/")!
 
+    /// WebViewで選ばれた配色をSwiftUI側に伝える。
+    /// 配色の適用はSwiftUIのpreferredColorSchemeに一本化している（ContentViewを参照）
+    var onAppThemeChanged: ((AppTheme) -> Void)?
+
     private var webView: WKWebView!
     private let loadingIndicator = UIActivityIndicatorView(style: .large)
     private let errorView = UIStackView()
@@ -15,7 +19,6 @@ final class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        setTheme(UserDefaults.standard.string(forKey: "appTheme"))
         configureView()
         configureWebView()
         load(Self.targetURL)
@@ -27,7 +30,8 @@ final class WebViewController: UIViewController {
     }
 
     private func configureView() {
-        view.backgroundColor = .systemBackground
+        // セーフエリアの余白をWebコンテンツと同じ色にして、継ぎ目なく見せる
+        view.backgroundColor = WebPalette.background
 
         loadingIndicator.translatesAutoresizingMaskIntoConstraints = false
         loadingIndicator.hidesWhenStopped = true
@@ -93,8 +97,10 @@ final class WebViewController: UIViewController {
         webView.uiDelegate = self
         webView.isInspectable = true
         webView.translatesAutoresizingMaskIntoConstraints = false
-        webView.backgroundColor = .clear
         webView.isOpaque = false
+        // 読み込み完了までの白い一瞬と、行き過ぎスクロール時の白い帯を防ぐ
+        webView.backgroundColor = WebPalette.background
+        webView.scrollView.backgroundColor = WebPalette.background
         view.insertSubview(webView, at: 0)
 
         NSLayoutConstraint.activate([
@@ -200,7 +206,7 @@ final class WebViewController: UIViewController {
             present(SFSafariViewController(url: url), animated: true)
         case "reloadPage": webView.reload()
         case "simulateLoadError": load(Self.unreachableURL)
-        case "setAppTheme": setTheme(args.first as? String)
+        case "setAppTheme": onAppThemeChanged?(AppTheme.from(args.first as? String))
         case "vibrate": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         case "copyToClipboard": UIPasteboard.general.string = args.dropFirst().first as? String
         case "shareText":
@@ -234,16 +240,6 @@ final class WebViewController: UIViewController {
         callbackTasks[requestID]?.cancel()
         callbackTasks[requestID] = work
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delay), execute: work)
-    }
-
-    private func setTheme(_ value: String?) {
-        let style: UIUserInterfaceStyle = switch value?.lowercased() {
-        case "light": .light
-        case "dark": .dark
-        default: .unspecified
-        }
-        overrideUserInterfaceStyle = style
-        UserDefaults.standard.set(value, forKey: "appTheme")
     }
 
     private func evaluate(_ script: String) { webView.evaluateJavaScript(script) }

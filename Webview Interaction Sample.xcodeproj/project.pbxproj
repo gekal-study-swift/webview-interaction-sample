@@ -408,7 +408,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "cn.gekal.ios.WebviewInteractionSample";
+				PRODUCT_BUNDLE_IDENTIFIER = cn.gekal.ios.WebviewInteractionSample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -436,7 +436,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "cn.gekal.ios.WebviewInteractionSample";
+				PRODUCT_BUNDLE_IDENTIFIER = cn.gekal.ios.WebviewInteractionSample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -454,7 +454,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "cn.gekal.ios.WebviewInteractionSampleTests";
+				PRODUCT_BUNDLE_IDENTIFIER = cn.gekal.ios.WebviewInteractionSampleTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -473,7 +473,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "cn.gekal.ios.WebviewInteractionSampleTests";
+				PRODUCT_BUNDLE_IDENTIFIER = cn.gekal.ios.WebviewInteractionSampleTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -490,7 +490,7 @@
 				DEVELOPMENT_TEAM = N8RU3D7VY6;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "cn.gekal.ios.WebviewInteractionSampleUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = cn.gekal.ios.WebviewInteractionSampleUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
@@ -507,7 +507,7 @@
 				DEVELOPMENT_TEAM = N8RU3D7VY6;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "cn.gekal.ios.WebviewInteractionSampleUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = cn.gekal.ios.WebviewInteractionSampleUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
