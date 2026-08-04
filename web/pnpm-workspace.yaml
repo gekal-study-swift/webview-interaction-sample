@@ -1,0 +1,5 @@
+# sharp は next/image の最適化用。静的エクスポート (images.unoptimized) では使わないためビルドしない。
+# core-js の postinstall は寄付の案内で不要なため実行しない（vconsole の依存）。
+allowBuilds:
+  core-js: false
+  sharp: false

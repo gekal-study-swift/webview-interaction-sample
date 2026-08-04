@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="WebView Interaction Sample">
+  <!--
+    favicon.ico の 16x16 / 32x32 用の簡略版。
+    app/icon.svg のブラウザウィンドウは小サイズだと潰れて読めないため、
+    双方向 (⇄) だけを大きく描いている。
+  -->
+  <rect width="32" height="32" rx="7" fill="#00695F" />
+  <path d="M7 11H19.5" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M26 11L19.5 7V15Z" fill="#FFFFFF" />
+  <path d="M25 22H12.5" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M6 22L12.5 18V26Z" fill="#FFFFFF" />
+</svg>

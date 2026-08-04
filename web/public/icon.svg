@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-label="WebView Interaction Sample">
+  <!-- Android のランチャーアイコン (app/src/main/res/drawable/ic_launcher_foreground.xml) と同じデザイン -->
+  <rect width="108" height="108" rx="24" fill="#00695F" />
+  <g fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round">
+    <rect x="26" y="32" width="56" height="44" rx="7" />
+  </g>
+  <path d="M26 45H82" stroke="#FFFFFF" stroke-width="4" />
+  <circle cx="34" cy="38.5" r="2.2" fill="#FFFFFF" />
+  <circle cx="42" cy="38.5" r="2.2" fill="#FFFFFF" />
+  <path d="M37 54H61" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" />
+  <path d="M72 54L61 48.5V59.5Z" fill="#FFFFFF" />
+  <path d="M71 66H47" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" />
+  <path d="M36 66L47 60.5V71.5Z" fill="#FFFFFF" />
+</svg>

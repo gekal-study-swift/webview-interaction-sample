@@ -13,6 +13,5 @@ struct WebViewContainer: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: WebViewController, context: Context) {
-        // do nothing.
     }
 }

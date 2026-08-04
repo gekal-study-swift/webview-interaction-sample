@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "cn.gekal.android.myapplicationwebviewinteractionsample",
+      "sha256_cert_fingerprints": [
+        "20:90:BB:7B:D3:77:77:F2:CB:A2:68:4F:57:95:56:42:E9:DC:A7:9E:59:2C:AF:96:CA:E8:73:49:4A:23:FA:F4",
+        "02:10:15:7E:34:FF:48:DB:BE:5B:59:45:82:41:4D:3E:48:0D:97:33:5E:98:C6:FE:3C:24:6A:9C:55:2D:46:75"
+      ]
+    }
+  }
+]
