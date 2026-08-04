@@ -134,6 +134,61 @@ esac
 command -v xcodebuild >/dev/null || { echo "error: xcodebuildが見つかりません" >&2; exit 1; }
 command -v xcrun >/dev/null || { echo "error: xcrunが見つかりません" >&2; exit 1; }
 
+readonly XCODE_PREFERENCES="$HOME/Library/Preferences/com.apple.dt.Xcode.plist"
+
+# XcodeにサインインしたApple IDが持つTeamを「Team ID<TAB>Team種別」で列挙する
+xcode_account_teams() {
+  [[ -f "$XCODE_PREFERENCES" ]] || return 0
+  plutil -extract IDEProvisioningTeamByIdentifier xml1 -o - "$XCODE_PREFERENCES" 2>/dev/null \
+    | awk '
+        /<key>teamID<\/key>/ { getline; gsub(/^[^>]*>|<.*$/, ""); id = $0; next }
+        /<key>teamType<\/key>/ {
+          if (id != "") { getline; gsub(/^[^>]*>|<.*$/, ""); print id "\t" $0; id = "" }
+        }
+      '
+}
+
+readonly account_teams="$(xcode_account_teams)"
+
+# Team IDに対応するTeam種別を返す。サインイン済みのApple IDに無ければ失敗する
+team_type_of() {
+  local wanted="$1" account_id account_type
+  while IFS=$'\t' read -r account_id account_type; do
+    [[ -n "$account_id" ]] || continue
+    if [[ "$account_id" == "$wanted" ]]; then
+      printf '%s' "$account_type"
+      return 0
+    fi
+  done <<<"$account_teams"
+  return 1
+}
+
+team_note() {
+  local team_type
+  if ! team_type="$(team_type_of "$1")"; then
+    printf 'Xcode未サインイン'
+  elif [[ "$team_type" == "Personal Team" ]]; then
+    printf '無料のPersonal Team'
+  else
+    printf '%s' "$team_type"
+  fi
+}
+
+project_development_team() {
+  xcodebuild \
+    -project "$PROJECT" \
+    -scheme "$SCHEME" \
+    -configuration "$configuration" \
+    -showBuildSettings 2>/dev/null \
+    | awk -F' = ' '/^ +DEVELOPMENT_TEAM = /{ print $2; exit }'
+}
+
+if [[ -z "$team" ]]; then
+  echo "==> プロジェクト設定のDevelopment Teamを確認します"
+  team="$(project_development_team)"
+  [[ -n "$team" ]] && echo "==> Development Team $team を使用します（プロジェクト設定）"
+fi
+
 if [[ -z "$team" ]]; then
   team_ids=()
   team_labels=()
@@ -169,7 +224,7 @@ if [[ -z "$team" ]]; then
       ;;
     1)
       team="${team_ids[0]}"
-      echo "==> Development Team $team を使用します"
+      echo "==> Development Team $team を使用します（証明書から検出）"
       ;;
     *)
       if [[ ! -t 0 ]]; then
@@ -179,7 +234,11 @@ if [[ -z "$team" ]]; then
 
       echo "Development Teamを選択してください:"
       for ((index = 0; index < ${#team_ids[@]}; index += 1)); do
-        printf '  %d) %s [%s]\n' "$((index + 1))" "${team_labels[index]}" "${team_ids[index]}"
+        printf '  %d) %s [%s] (%s)\n' \
+          "$((index + 1))" \
+          "${team_labels[index]}" \
+          "${team_ids[index]}" \
+          "$(team_note "${team_ids[index]}")"
       done
 
       while true; do
@@ -193,6 +252,14 @@ if [[ -z "$team" ]]; then
       done
       ;;
   esac
+fi
+
+if ! selected_team_type="$(team_type_of "$team")"; then
+  echo "warning: Team $team のApple IDがXcodeにサインインされていません" >&2
+  echo "  Xcode > Settings > Accounts でApple IDを追加すると自動署名が利用できます。" >&2
+elif [[ "$selected_team_type" == "Personal Team" ]]; then
+  echo "note: Team $team は無料のPersonal Teamです"
+  echo "  Provisioning Profileの有効期限は7日で、他のTeamが登録済みのBundle IDは使用できません。"
 fi
 
 readonly derived_data="$PROJECT_ROOT/.build/DeviceDerivedData"
@@ -215,8 +282,11 @@ echo "==> ${configuration}版を実機向けにビルドします"
 if ! "${build_command[@]}"; then
   echo >&2
   echo "error: 実機向けビルドに失敗しました" >&2
-  echo "署名エラーの場合はXcodeのSettings > AccountsでTeam $team のApple IDにサインインし、" >&2
-  echo "証明書とProvisioning Profileを更新してから再実行してください。" >&2
+  echo "署名エラーの場合は次を確認してください。" >&2
+  echo "  - No Account for Team \"$team\": Xcode > Settings > Accounts で該当Apple IDにサインインする" >&2
+  echo "  - Failed Registering Bundle Identifier: $BUNDLE_ID を別のTeamが登録済み。" >&2
+  echo "    そのTeamでビルドするか、--teamで登録済みのTeam IDを指定する" >&2
+  echo "  - No profiles found: Xcodeで一度プロジェクトを開き、Provisioning Profileを更新する" >&2
   exit 1
 fi
 
