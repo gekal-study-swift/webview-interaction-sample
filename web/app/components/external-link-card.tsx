@@ -22,7 +22,7 @@ const APP_LINK_URL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
  * オリジン直下の /.well-known/assetlinks.json と manifest の asset_statements が対になって
  * 初めて URL バーが隠れる。
  */
-const OWN_SITE_URL = 'https://webview-interaction-sample.demo.gekal.cn/twa.html';
+const OWN_SITE_URL = 'https://webview-interaction-sample.ios.demo.gekal.cn/twa.html';
 
 /** `intent://` の例。対応アプリがなければ browser_fallback_url に落ちる。 */
 const INTENT_URI =

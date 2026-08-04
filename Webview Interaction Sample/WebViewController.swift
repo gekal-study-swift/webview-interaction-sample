@@ -26,6 +26,9 @@ final class WebViewController: UIViewController {
     /// これが無いと、エラー再現用の到達できないURLまで「外部リンク」と判定されてしまう。
     private var appRequestedURL: URL?
 
+    /// 同じUniversal Linkで何度も読み直さないための記録
+    private var lastUniversalLink: URL?
+
     private var state: LoadState = .loading {
         didSet {
             guard state != oldValue else { return }
@@ -249,6 +252,20 @@ final class WebViewController: UIViewController {
     }
 
     @objc private func retry() { load(Self.targetURL) }
+
+    /// Universal Linkで渡されたURLを開く。
+    ///
+    /// AndroidのApp Links（intent-filterで受け取ったIntentのdata）に相当する。
+    /// 検証済みのドメインしか渡ってこないが、同じ判定を通してからWebViewに読み込ませる。
+    func open(universalLink url: URL) {
+        guard url != lastUniversalLink else { return }
+        lastUniversalLink = url
+
+        guard LinkPolicy.resolve(scheme: url.scheme, host: url.host, targetHost: Self.targetHost) == .inWebView else {
+            return
+        }
+        load(url)
+    }
 
     private func render() {
         switch state {

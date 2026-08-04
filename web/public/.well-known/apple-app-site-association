@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["3C654MC27L.cn.gekal.ios.WebviewInteractionSample"],
+        "components": [
+          {
+            "/": "/*",
+            "comment": "このサイトのすべてのパスをアプリで開く"
+          }
+        ]
+      }
+    ]
+  }
+}

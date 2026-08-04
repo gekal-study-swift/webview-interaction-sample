@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Universal Linksの対象ドメイン。Androidのasset_statements / intent-filterに相当する。
+		サイト側の /.well-known/apple-app-site-association と対になって初めて検証が通る。
+		有料のApple Developer Programが必要で、無料のPersonal Teamでは使用できない。
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:webview-interaction-sample.ios.demo.gekal.cn</string>
+	</array>
+</dict>
+</plist>

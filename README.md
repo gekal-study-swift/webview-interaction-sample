@@ -152,6 +152,19 @@ iOS に同じ仕組みが無いものは、最も近い挙動に読み替えて�
 同一ホストの http(s) だけを WebView 内で読み込み、それ以外の http(s) は
 `SFSafariViewController`、`tel:` や `mailto:` などは端末のアプリに渡します。
 
+### Universal Links
+
+Android の `assetlinks.json`（Digital Asset Links）に相当するのが Universal Links です。
+サイト側に `web/public/.well-known/apple-app-site-association`、
+アプリ側に Associated Domains エンタイトルメントを置き、両方そろって初めて検証が通ります。
+検証が通ると、他のアプリからこのサイトのリンクを開いたときに Safari ではなくアプリが起動し、
+`ContentView` の `onContinueUserActivity` が受け取って WebView に読み込みます。
+`APP_LINK` モードもこの検証結果を使います。
+
+**Associated Domains は有料の Apple Developer Program が必要**で、無料の Personal Team では使えません。
+そのため既定ではエンタイトルメントをビルドに紐づけていません。
+有効にする手順は [`web/public/.well-known/README.md`](web/public/.well-known/README.md) にあります。
+
 ## 配色
 
 `web/app/theme.ts` の色を `AppTheme.swift` の `WebPalette` に写し、

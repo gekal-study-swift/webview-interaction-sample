@@ -1,7 +1,7 @@
 /**
  * 配信元のパス。
  *
- * カスタムドメイン (webview-interaction-sample.demo.gekal.cn) でルート配信しているため既定は空。
+ * カスタムドメイン (webview-interaction-sample.ios.demo.gekal.cn) でルート配信しているため既定は空。
  * `<user>.github.io/<repo>/` 形式のプロジェクトサイトに戻す場合は
  * `BASE_PATH=/webview-interaction-sample` を指定する。
  *
