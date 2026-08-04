@@ -97,7 +97,7 @@ final class WebViewController: UIViewController {
     }
 
     private func configureWebView() {
-        UIDevice.current.isBatteryMonitoringEnabled = true
+        observeBatteryChanges()
 
         let controller = WKUserContentController()
         controller.add(WeakScriptMessageHandler(self), name: "nativeBridge")
@@ -131,33 +131,32 @@ final class WebViewController: UIViewController {
         ])
     }
 
+    /// WebViewに注入するブリッジ。
+    ///
+    /// Webページは`window.AndroidInterface`を呼び出すため、iOSでも同じ名前で公開する。
+    /// Androidの`@JavascriptInterface`は戻り値を同期で返せるが、`postMessage()`は返せない。
+    /// そのため戻り値のある`getDeviceInfo` / `getBatteryStatus`はJS側に値を持たせ、
+    /// 変化するバッテリーだけネイティブから更新する。
     private func bridgeScript() -> String {
-        let deviceInfo = jsonString([
-            "manufacturer": "Apple",
-            "model": UIDevice.current.model,
-            "androidVersion": UIDevice.current.systemVersion,
-            "sdkInt": ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
-            "appVersion": appVersion,
-            "packageName": Bundle.main.bundleIdentifier ?? "",
-            "locale": Locale.current.identifier,
-            "timeZone": TimeZone.current.identifier,
-        ])
-        let batteryInfo = jsonString([
-            "level": UIDevice.current.batteryLevel < 0 ? -1 : Int(UIDevice.current.batteryLevel * 100),
-            "charging": [.charging, .full].contains(UIDevice.current.batteryState),
-        ])
-
-        return """
+        """
         (() => {
-          const post = (method, args = []) => window.webkit.messageHandlers.nativeBridge.postMessage({ method, args });
+          const post = (method, args = []) => {
+            // postMessage()はPromiseを返す。Androidの@JavascriptInterfaceは値を返さないため、
+            // 呼び出し側のログに[object Promise]が出ないよう戻り値を捨てる。
+            window.webkit.messageHandlers.nativeBridge.postMessage({ method, args });
+          };
+
+          let batteryStatus = \(javaScriptLiteral(batteryStatusJSON));
+          window.__updateBatteryStatus = json => { batteryStatus = json; };
+
           window.AndroidInterface = {
             showToast: (message, longDuration = false) => post('showToast', [message, longDuration]),
             openExternalLink: (url, mode) => post('openExternalLink', [url, mode]),
             reloadPage: () => post('reloadPage'),
             simulateLoadError: () => post('simulateLoadError'),
             setAppTheme: theme => post('setAppTheme', [theme]),
-            getDeviceInfo: () => \(javaScriptLiteral(deviceInfo)),
-            getBatteryStatus: () => \(javaScriptLiteral(batteryInfo)),
+            getDeviceInfo: () => \(javaScriptLiteral(deviceInfoJSON)),
+            getBatteryStatus: () => batteryStatus,
             vibrate: milliseconds => post('vibrate', [milliseconds]),
             copyToClipboard: (label, text) => post('copyToClipboard', [label, text]),
             shareText: text => post('shareText', [text]),
@@ -165,6 +164,64 @@ final class WebViewController: UIViewController {
           };
         })();
         """
+    }
+
+    /// 端末情報。Androidの`Build`に対応する値をiOSの名前で返す。
+    /// `sdkInt`のようにiOSへ持ち込んでも意味の無い項目は含めない。
+    private var deviceInfoJSON: String {
+        jsonString([
+            "manufacturer": "Apple",
+            "model": deviceModelIdentifier,
+            "systemName": UIDevice.current.systemName,
+            "systemVersion": UIDevice.current.systemVersion,
+            "appVersion": appVersion,
+            "bundleIdentifier": Bundle.main.bundleIdentifier ?? "",
+            "locale": Locale.current.identifier,
+            "timeZone": TimeZone.current.identifier,
+        ])
+    }
+
+    private var batteryStatusJSON: String {
+        // 電池監視が無効な場合とシミュレータでは-1が返る
+        let level = UIDevice.current.batteryLevel
+        return jsonString([
+            "level": level < 0 ? -1 : Int((level * 100).rounded()),
+            "charging": [.charging, .full].contains(UIDevice.current.batteryState),
+        ])
+    }
+
+    /// `Build.MODEL`相当の機種識別子（`iPhone16,1`など）。
+    /// `UIDevice.model`は"iPhone"としか返さず、機種の違いが分からない。
+    private var deviceModelIdentifier: String {
+        if let simulator = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+            return simulator
+        }
+        var info = utsname()
+        uname(&info)
+        return withUnsafeBytes(of: &info.machine) { buffer in
+            String(cString: buffer.baseAddress!.assumingMemoryBound(to: CChar.self))
+        }
+    }
+
+    /// バッテリーの変化をJS側の値に反映する。
+    ///
+    /// `getBatteryStatus()`は同期的に値を返す必要があり、呼ばれてからネイティブに問い合わせられない。
+    /// Androidは呼び出しのたびに`BatteryManager`を読めるが、iOSでは変化を先に送っておく。
+    private func observeBatteryChanges() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+
+        for name in [UIDevice.batteryLevelDidChangeNotification, UIDevice.batteryStateDidChangeNotification] {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(batteryStatusDidChange),
+                name: name,
+                object: nil
+            )
+        }
+    }
+
+    @objc private func batteryStatusDidChange() {
+        evaluate("window.__updateBatteryStatus?.(\(javaScriptLiteral(batteryStatusJSON)))")
     }
 
     private var appVersion: String {
@@ -223,7 +280,7 @@ final class WebViewController: UIViewController {
         case "showToast":
             let message = args.first as? String ?? ""
             let isLong = args.dropFirst().first as? Bool ?? false
-            showToast(message: message, duration: isLong ? 3.5 : 2)
+            showToast(message: message, duration: isLong ? Toast.longDuration : Toast.shortDuration)
             evaluate("window.handleReturnValue?.('Hello from iOS!')")
         case "openExternalLink":
             guard let rawURL = args.first as? String else { return }
@@ -235,7 +292,7 @@ final class WebViewController: UIViewController {
         case "reloadPage": webView.reload()
         case "simulateLoadError": load(Self.unreachableURL)
         case "setAppTheme": onAppThemeChanged?(AppTheme.from(args.first as? String))
-        case "vibrate": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        case "vibrate": vibrate(milliseconds: (args.first as? NSNumber)?.intValue ?? 0)
         case "copyToClipboard": UIPasteboard.general.string = args.dropFirst().first as? String
         case "shareText":
             guard let text = args.first as? String else { return }
@@ -251,6 +308,22 @@ final class WebViewController: UIViewController {
         case "requestNativeCallback": scheduleCallback(args)
         default: break
         }
+    }
+
+    /// 端末を振動させる。
+    ///
+    /// iOSに時間を指定して振動させる仕組みは無い（`AudioServicesPlaySystemSound`も長さは固定）。
+    /// Webから渡されるミリ秒（50〜1000）を、触覚フィードバックの強さに読み替える。
+    private func vibrate(milliseconds: Int) {
+        let style: UIImpactFeedbackGenerator.FeedbackStyle = switch milliseconds {
+        case ..<150: .light
+        case ..<500: .medium
+        default: .heavy
+        }
+
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.prepare()
+        generator.impactOccurred()
     }
 
     private func scheduleCallback(_ args: [Any]) {

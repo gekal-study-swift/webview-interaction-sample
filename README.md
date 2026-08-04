@@ -43,6 +43,29 @@ Web ページは `window.AndroidInterface` を呼び出します。iOS では同
 `LinkPolicy.swift` と `LoadState.swift` は UIKit に依存しないため、
 シミュレータや実機なしで検証できます（Android 版の同名ファイルと同じ方針）。
 
+## ブリッジ API
+
+Web ページは `window.AndroidInterface` を呼び出します（型定義は `web/types/android.d.ts`）。
+iOS でも同じ名前・同じ引数で公開していますが、次の 4 点は仕組みが違うため作りが異なります。
+
+**戻り値** — Android の `@JavascriptInterface` は値を同期で返せますが、
+`postMessage()` は返せません（呼び出しは常に Promise を返す）。
+そのため値を返す `getDeviceInfo` / `getBatteryStatus` は JS 側に値を持たせ、
+それ以外は戻り値を捨てて Android と同じ「値を返さない呼び出し」に揃えています。
+
+**バッテリー** — Android は呼ばれるたびに `BatteryManager` を読めますが、iOS は同期的に問い合わせられません。
+`UIDevice` の変化通知を受けてネイティブから JS 側の値を先に更新しています。
+
+**端末情報** — `androidVersion` / `sdkInt` / `packageName` の代わりに
+`systemName` / `systemVersion` / `bundleIdentifier` を返します。`sdkInt` に相当するものは無いため含めません。
+`model` は `UIDevice.model`（"iPhone" としか返さない）ではなく機種識別子（`iPhone18,1`）です。
+
+**バイブレーション** — iOS に時間を指定して振動させる仕組みは無いため、
+Web から渡されるミリ秒を触覚フィードバックの強さ（`light` / `medium` / `heavy`）に読み替えています。
+
+トーストは iOS に無いため、`Toast.swift` で見た目と表示時間（`LENGTH_SHORT` / `LENGTH_LONG`）だけ合わせています。
+`UIAlertController` と違い操作を妨げず、モーダルの上にも出せるよう専用のウィンドウに載せています。
+
 ## 実機で動かす
 
 接続中の iPhone を確認し、ビルド・インストール・起動まで行います。

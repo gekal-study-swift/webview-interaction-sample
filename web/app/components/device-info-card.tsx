@@ -19,13 +19,23 @@ import { useBridge } from '../bridge-provider';
 import { monoFontFamily } from '../theme';
 import { SectionCard } from './section-card';
 
+/**
+ * ネイティブが返したキーの表示名。
+ *
+ * 未知のキーはそのまま表示するため、OS ごとに項目が違っても表示は壊れない。
+ * Android は `androidVersion` / `sdkInt` / `packageName` を、
+ * iOS は `systemName` / `systemVersion` / `bundleIdentifier` を返す。
+ */
 const LABELS: Record<string, string> = {
   manufacturer: 'メーカー',
   model: 'モデル',
   androidVersion: 'Android バージョン',
   sdkInt: 'SDK レベル',
+  systemName: 'OS',
+  systemVersion: 'OS バージョン',
   appVersion: 'アプリバージョン',
   packageName: 'パッケージ名',
+  bundleIdentifier: 'Bundle ID',
   locale: 'ロケール',
   timeZone: 'タイムゾーン',
 };
