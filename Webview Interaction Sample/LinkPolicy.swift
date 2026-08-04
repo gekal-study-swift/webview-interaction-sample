@@ -92,6 +92,39 @@ enum LinkPolicy {
         return isBrowsableURL(scheme: scheme)
     }
 
+    /// `geo:`をマップアプリで開けるURLに読み替える。
+    ///
+    /// `geo:`はAndroidの地図アプリが受け取るスキームで、iOSには対応するアプリが無い。
+    /// そのまま開こうとすると「対応するアプリが見つかりませんでした」になるため、
+    /// 緯度経度と検索語を取り出してマップのURLに組み替える。
+    ///
+    /// - `geo:35.681236,139.767125?q=東京駅` → `maps://?ll=35.681236,139.767125&q=東京駅`
+    /// - `geo:0,0?q=東京駅` → `maps://?q=東京駅`（Androidで座標を持たない検索の書き方）
+    static func appleMapsURL(fromGeoURI url: URL) -> URL? {
+        guard url.scheme?.lowercased() == "geo",
+              let source = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+
+        // スキームの直後（"geo:"以降）がpathとして取れる
+        let coordinate = source.path
+        let query = source.queryItems?.first { $0.name == "q" }?.value
+
+        var items: [URLQueryItem] = []
+        if !coordinate.isEmpty, coordinate != "0,0" {
+            items.append(URLQueryItem(name: "ll", value: coordinate))
+        }
+        if let query, !query.isEmpty {
+            items.append(URLQueryItem(name: "q", value: query))
+        }
+        guard !items.isEmpty else { return nil }
+
+        var maps = URLComponents()
+        maps.scheme = "maps"
+        maps.host = ""
+        maps.queryItems = items
+        return maps.url
+    }
+
     /// `intent://…;S.browser_fallback_url=…;end`からフォールバック先を取り出す。
     ///
     /// iOSに`intent://`を解釈する仕組みは無いため、Androidが対応アプリを見つけられなかったときと

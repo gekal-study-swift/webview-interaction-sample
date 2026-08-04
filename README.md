@@ -161,6 +161,10 @@ iOS に同じ仕組みが無いものは、最も近い挙動に読み替えて�
 同一ホストの http(s) だけを WebView 内で読み込み、それ以外の http(s) は
 `SFSafariViewController`、`tel:` や `mailto:` などは端末のアプリに渡します。
 
+`geo:` は Android の地図アプリ向けのスキームで iOS に対応アプリが無いため、
+`maps://?ll=<緯度,経度>&q=<検索語>` に読み替えてマップアプリに渡します
+（`LinkPolicy.appleMapsURL(fromGeoURI:)`）。
+
 ### Universal Links
 
 Android の `assetlinks.json`（Digital Asset Links）に相当するのが Universal Links です。

@@ -141,10 +141,14 @@ extension UIViewController {
     ///
     /// 電話は`tel:`（ダイヤル画面の確認が入る）を使う。
     /// 即座に発信する仕組みはiOSには無いため、Android版の`ACTION_DIAL`と同じ結果になる。
+    ///
+    /// Androidの地図アプリ向けの`geo:`だけはiOSに対応アプリが無いため、マップのURLに読み替える。
     func openWithExternalApp(_ url: URL) {
-        UIApplication.shared.open(url, options: [:]) { [weak self] opened in
+        let target = LinkPolicy.appleMapsURL(fromGeoURI: url) ?? url
+
+        UIApplication.shared.open(target, options: [:]) { [weak self] opened in
             guard !opened else { return }
-            NSLog("[ExternalLinkOpener] このURIを開けるアプリがありません: %@", url.absoluteString)
+            NSLog("[ExternalLinkOpener] このURIを開けるアプリがありません: %@", target.absoluteString)
             self?.showToast(message: "対応するアプリが見つかりませんでした")
         }
     }
