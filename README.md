@@ -50,7 +50,8 @@ xcrun devicectl list devices
 iOS端末が1台なら自動で選択し、複数接続されている場合は番号付きの一覧から選択できます。
 自動実行では`--device <UDIDまたは端末名>`または`IOS_DEVICE`で明示指定できます。
 
-Xcodeの自動署名でTeamを特定できない場合は、Apple Developer Team IDを指定します。
+コード署名証明書が1つならDevelopment Teamも自動選択し、複数ある場合は一覧から選択します。
+CIなどの非対話実行や自動検出を使わない場合は、Apple Developer Team IDを指定します。
 
 ```shell
 ./scripts/build-and-install.sh --device <UDIDまたは端末名> --team <TEAM_ID>

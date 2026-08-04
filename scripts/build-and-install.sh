@@ -134,6 +134,67 @@ esac
 command -v xcodebuild >/dev/null || { echo "error: xcodebuildが見つかりません" >&2; exit 1; }
 command -v xcrun >/dev/null || { echo "error: xcrunが見つかりません" >&2; exit 1; }
 
+if [[ -z "$team" ]]; then
+  team_ids=()
+  team_labels=()
+
+  while IFS= read -r identity; do
+    if [[ "$identity" =~ \"([^\"]+)\"$ ]]; then
+      identity_name="${BASH_REMATCH[1]}"
+      certificate_subject="$(
+        security find-certificate -c "$identity_name" -p 2>/dev/null \
+          | openssl x509 -noout -subject -nameopt RFC2253 2>/dev/null \
+          || true
+      )"
+      [[ "$certificate_subject" =~ OU=([^,]+) ]] || continue
+      candidate="${BASH_REMATCH[1]}"
+      duplicate=false
+      if ((${#team_ids[@]} > 0)); then
+        for existing in "${team_ids[@]}"; do
+          [[ "$existing" == "$candidate" ]] && duplicate=true
+        done
+      fi
+      if [[ "$duplicate" == false ]]; then
+        team_ids+=("$candidate")
+        team_labels+=("$identity_name")
+      fi
+    fi
+  done < <(security find-identity -v -p codesigning 2>/dev/null)
+
+  case "${#team_ids[@]}" in
+    0)
+      echo "error: 有効なAppleコード署名証明書が見つかりません" >&2
+      echo "XcodeのSettings > AccountsでApple IDと証明書を設定するか、--teamでTeam IDを指定してください。" >&2
+      exit 1
+      ;;
+    1)
+      team="${team_ids[0]}"
+      echo "==> Development Team $team を使用します"
+      ;;
+    *)
+      if [[ ! -t 0 ]]; then
+        echo "error: 複数のDevelopment Teamが見つかりました。非対話実行では--teamまたはDEVELOPMENT_TEAMを指定してください。" >&2
+        exit 2
+      fi
+
+      echo "Development Teamを選択してください:"
+      for ((index = 0; index < ${#team_ids[@]}; index += 1)); do
+        printf '  %d) %s [%s]\n' "$((index + 1))" "${team_labels[index]}" "${team_ids[index]}"
+      done
+
+      while true; do
+        read -r -p "番号を入力してください [1-${#team_ids[@]}]: " selection
+        if [[ "$selection" =~ ^[0-9]+$ ]] && ((selection >= 1 && selection <= ${#team_ids[@]})); then
+          team="${team_ids[selection - 1]}"
+          echo "==> Development Team $team を使用します"
+          break
+        fi
+        echo "error: 1から${#team_ids[@]}までの番号を入力してください" >&2
+      done
+      ;;
+  esac
+fi
+
 readonly derived_data="$PROJECT_ROOT/.build/DeviceDerivedData"
 readonly app_path="$derived_data/Build/Products/$configuration-iphoneos/$SCHEME.app"
 
@@ -148,12 +209,16 @@ build_command=(
   build
 )
 
-if [[ -n "$team" ]]; then
-  build_command+=("DEVELOPMENT_TEAM=$team")
-fi
+build_command+=("DEVELOPMENT_TEAM=$team")
 
 echo "==> ${configuration}版を実機向けにビルドします"
-"${build_command[@]}"
+if ! "${build_command[@]}"; then
+  echo >&2
+  echo "error: 実機向けビルドに失敗しました" >&2
+  echo "署名エラーの場合はXcodeのSettings > AccountsでTeam $team のApple IDにサインインし、" >&2
+  echo "証明書とProvisioning Profileを更新してから再実行してください。" >&2
+  exit 1
+fi
 
 if [[ ! -d "$app_path" ]]; then
   echo "error: ビルド成果物が見つかりません: $app_path" >&2
