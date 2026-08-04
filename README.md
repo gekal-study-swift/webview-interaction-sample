@@ -50,7 +50,7 @@ xcrun devicectl list devices
 iOS端末が1台なら自動で選択し、複数接続されている場合は番号付きの一覧から選択できます。
 自動実行では`--device <UDIDまたは端末名>`または`IOS_DEVICE`で明示指定できます。
 
-Development Teamはプロジェクト設定の`DEVELOPMENT_TEAM`（`3C654MC27L`）を使用します。
+Development Teamはプロジェクト設定の`DEVELOPMENT_TEAM`（`N8RU3D7VY6`）を使用します。
 未設定の場合はコード署名証明書から検出し、複数ある場合は一覧から選択します。
 CIなどの非対話実行や別のTeamでビルドする場合はTeam IDを指定します。
 
@@ -66,11 +66,19 @@ CIなどの非対話実行や別のTeamでビルドする場合はTeam IDを指�
 Xcode > Settings > Accountsで追加してください。サインインしていないTeamを指定すると
 `No Account for Team "<TEAM_ID>"`でビルドが失敗します。
 
-無料のPersonal Teamでは、Provisioning Profileの有効期限が7日になり、
-他のTeamが登録済みのBundle IDは使用できません
-（`Failed Registering Bundle Identifier`）。
-`cn.gekal.ios.Webview-Interaction-Sample`はPersonal Teamでは登録できないため、
-有料Teamのアカウントでビルドしてください。
+初回インストール後は、端末で開発者証明書を信頼するまでアプリを起動できません。
+設定 > 一般 > VPNとデバイス管理 > デベロッパApp から開発元を信頼してください。
+
+現在のBundle ID `cn.gekal.ios.WebviewInteractionSample`は無料のPersonal Team
+`N8RU3D7VY6`で登録しています。Personal TeamはProvisioning Profileの有効期限が7日のため、
+期限切れの際は再度ビルドし直してください。
+
+有料Team（`3C654MC27L`）に切り替える場合は、そのApple IDをXcodeにサインインしたうえで
+Team IDを指定します。Bundle IDはTeam間で共有できないため、変更が必要になる場合があります。
+
+```shell
+./scripts/build-and-install.sh --team 3C654MC27L
+```
 
 ## App Distribution
 

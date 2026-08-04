@@ -6,7 +6,7 @@ readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly PROJECT="$PROJECT_ROOT/Webview Interaction Sample.xcodeproj"
 readonly SCHEME="Webview Interaction Sample"
-readonly BUNDLE_ID="cn.gekal.ios.Webview-Interaction-Sample"
+readonly BUNDLE_ID="cn.gekal.ios.WebviewInteractionSample"
 
 device="${IOS_DEVICE:-}"
 configuration="Debug"
@@ -300,10 +300,17 @@ xcrun devicectl device install app --device "$device" "$app_path"
 
 if [[ "$launch" == true ]]; then
   echo "==> アプリを起動します"
-  xcrun devicectl device process launch \
+  if ! xcrun devicectl device process launch \
     --device "$device" \
     --terminate-existing \
-    "$BUNDLE_ID"
+    "$BUNDLE_ID"; then
+    echo >&2
+    echo "error: アプリの起動に失敗しました" >&2
+    echo "invalid code signature / profile has not been explicitly trusted の場合は、" >&2
+    echo "端末で開発者証明書を信頼してください（インストール自体は完了しています）。" >&2
+    echo "  設定 > 一般 > VPNとデバイス管理 > デベロッパApp > 開発元を信頼" >&2
+    exit 1
+  fi
 fi
 
 echo "==> 完了しました"
