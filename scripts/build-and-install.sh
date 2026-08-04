@@ -152,7 +152,7 @@ if [[ -n "$team" ]]; then
   build_command+=("DEVELOPMENT_TEAM=$team")
 fi
 
-echo "==> $configuration版を実機向けにビルドします"
+echo "==> ${configuration}版を実機向けにビルドします"
 "${build_command[@]}"
 
 if [[ ! -d "$app_path" ]]; then
