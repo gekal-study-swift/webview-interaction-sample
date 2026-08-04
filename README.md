@@ -3,7 +3,16 @@
 Android 版と同じ Web ページと JavaScript Bridge API を、WKWebView で動かす iOS サンプルです。
 同じ Web ページを両 OS で動かし、ネイティブ側の作りの違いを見比べられるようにしています。
 
-WebView URL: <https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=debug>
+WebView URL は構成ごとに分けています（Android 版の `configs/debug.json` / `configs/release.json` に相当）。
+
+| 構成 | URL |
+| --- | --- |
+| Debug | `https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=debug&vconsole=1` |
+| Release | `https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=release` |
+
+`vconsole=1` は端末上でログとネットワーク通信を見るための vConsole を有効にするクエリです。
+ビルド時フラグ `NEXT_PUBLIC_VCONSOLE`（GitHub のリポジトリ変数）でも有効にできますが、
+そちらは公開サイト全体に効くため、開発ビルドからは URL で上書きしています。
 
 Web ページは `window.AndroidInterface` を呼び出します。iOS では同じ名前の API を
 `WKUserScript` で注入し、`WKScriptMessageHandler` でネイティブに橋渡ししています。

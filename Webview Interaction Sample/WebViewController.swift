@@ -4,7 +4,18 @@ import UIKit
 import WebKit
 
 final class WebViewController: UIViewController {
-    private static let targetURL = URL(string: "https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=debug")!
+    /// 読み込むページ。Android版が`configs/debug.json` / `configs/release.json`で
+    /// URLを出し分けているのに合わせ、構成ごとに変える。
+    ///
+    /// `vconsole=1`はページ側のvConsoleを有効にするクエリ。
+    /// ビルド時フラグ`NEXT_PUBLIC_VCONSOLE`はサイト全体に効いてしまうため、
+    /// 開発ビルドのときだけURLで上書きする。
+    #if DEBUG
+    private static let targetURL = URL(string: "https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=debug&vconsole=1")!
+    #else
+    private static let targetURL = URL(string: "https://webview-interaction-sample.ios.demo.gekal.cn/index.html?env=release")!
+    #endif
+
     private static let unreachableURL = URL(string: "https://unreachable.invalid/")!
 
     /// 配信元のホスト。これ以外のhttp(s)はアプリ内ブラウザで開く
