@@ -16,21 +16,23 @@ launch=true
 usage() {
   cat <<'USAGE'
 Usage:
-  ./scripts/build-and-install.sh --device <UDID|device-name> [options]
+  ./scripts/build-and-install.sh [options]
 
 Options:
-  -d, --device <value>       インストール先のUDIDまたは端末名（IOS_DEVICEでも指定可）
+  -d, --device <value>       インストール先のIDまたは端末名（IOS_DEVICEでも指定可）
   -c, --configuration <name> DebugまたはRelease（既定: Debug）
       --team <team-id>       Apple Developer Team ID（DEVELOPMENT_TEAMでも指定可）
       --no-launch            インストール後にアプリを起動しない
   -h, --help                 このヘルプを表示
 
 Examples:
+  ./scripts/build-and-install.sh
   ./scripts/build-and-install.sh --device 00008110-001234567890001E
   ./scripts/build-and-install.sh --device "Gekal's iPhone" --team ABCDE12345
   IOS_DEVICE=00008110-001234567890001E ./scripts/build-and-install.sh
 
-接続端末は次のコマンドで確認できます:
+--deviceを省略するとiOS端末を検出します。1台なら自動選択し、複数なら一覧から選択します。
+接続端末は次のコマンドでも確認できます:
   xcrun devicectl list devices
 USAGE
 }
@@ -69,10 +71,59 @@ while (($# > 0)); do
 done
 
 if [[ -z "$device" ]]; then
-  echo "error: --deviceまたはIOS_DEVICEでインストール先を指定してください" >&2
-  echo >&2
-  xcrun devicectl list devices 2>/dev/null || true
-  exit 2
+  devices_json="$(mktemp "${TMPDIR:-/tmp}/webview-ios-devices.XXXXXX")"
+  trap 'rm -f "$devices_json"' EXIT
+
+  echo "==> 接続済みのiOS端末を検出します"
+  xcrun devicectl list devices --json-output "$devices_json" --quiet
+
+  device_ids=()
+  device_names=()
+  device_count="$(plutil -extract result.devices raw "$devices_json")"
+
+  for ((index = 0; index < device_count; index += 1)); do
+    platform="$(plutil -extract "result.devices.$index.hardwareProperties.platform" raw "$devices_json" 2>/dev/null || true)"
+    [[ "$platform" == "iOS" ]] || continue
+
+    identifier="$(plutil -extract "result.devices.$index.identifier" raw "$devices_json")"
+    name="$(plutil -extract "result.devices.$index.deviceProperties.name" raw "$devices_json")"
+    os_version="$(plutil -extract "result.devices.$index.deviceProperties.osVersionNumber" raw "$devices_json" 2>/dev/null || true)"
+    device_ids+=("$identifier")
+    device_names+=("$name${os_version:+ (iOS $os_version)}")
+  done
+
+  case "${#device_ids[@]}" in
+    0)
+      echo "error: 接続済みのiOS端末が見つかりません" >&2
+      echo "端末のロック、信頼設定、Developer Mode、USBまたはネットワーク接続を確認してください。" >&2
+      exit 1
+      ;;
+    1)
+      device="${device_ids[0]}"
+      echo "==> ${device_names[0]} を使用します"
+      ;;
+    *)
+      if [[ ! -t 0 ]]; then
+        echo "error: 複数のiOS端末が見つかりました。非対話実行では--deviceまたはIOS_DEVICEを指定してください。" >&2
+        exit 2
+      fi
+
+      echo "インストール先を選択してください:"
+      for ((index = 0; index < ${#device_ids[@]}; index += 1)); do
+        printf '  %d) %s [%s]\n' "$((index + 1))" "${device_names[index]}" "${device_ids[index]}"
+      done
+
+      while true; do
+        read -r -p "番号を入力してください [1-${#device_ids[@]}]: " selection
+        if [[ "$selection" =~ ^[0-9]+$ ]] && ((selection >= 1 && selection <= ${#device_ids[@]})); then
+          device="${device_ids[selection - 1]}"
+          echo "==> ${device_names[selection - 1]} を使用します"
+          break
+        fi
+        echo "error: 1から${#device_ids[@]}までの番号を入力してください" >&2
+      done
+      ;;
+  esac
 fi
 
 case "$configuration" in

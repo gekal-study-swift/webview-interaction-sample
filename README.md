@@ -44,8 +44,11 @@ Pull Requestではビルドまでを実行し、デプロイは行いません�
 
 ```shell
 xcrun devicectl list devices
-./scripts/build-and-install.sh --device <UDIDまたは端末名>
+./scripts/build-and-install.sh
 ```
+
+iOS端末が1台なら自動で選択し、複数接続されている場合は番号付きの一覧から選択できます。
+自動実行では`--device <UDIDまたは端末名>`または`IOS_DEVICE`で明示指定できます。
 
 Xcodeの自動署名でTeamを特定できない場合は、Apple Developer Team IDを指定します。
 
