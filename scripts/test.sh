@@ -3,18 +3,19 @@
 # テストを実行する。
 #
 # Usage:
-#   ./scripts/test.sh [unit|e2e|all] [options] [-- <playwrightの引数>]
+#   ./scripts/test.sh [unit|app|e2e|all] [options] [-- <playwrightの引数>]
 #
 # Scopes:
 #   e2e   Playwrightでの E2E（既定）。配信中のページをブラウザで開き、ブリッジをモックする
-#   unit  シミュレータでのユニットテスト（Swift Testing）
-#   all   unit と e2e の両方
+#   unit  UIKitに依存しないロジックのユニットテスト（Swift Testing、シミュレータ）
+#   app   アプリ込みのブリッジのテスト。アプリを起動し、本物のブリッジ越しに往復させる
+#   all   unit + app + e2e
 #
 # Options:
 #   -p, --project <name>       Playwrightのプロジェクト名（繰り返し指定可、既定は全て）
 #   -u, --url <url>            テスト対象のURL（e2e/.envのWEBVIEW_URLを上書き）
 #       --ui                   PlaywrightのUIモードで開く
-#   -s, --simulator <name>     ユニットテストに使うシミュレータ名（IOS_SIMULATORでも指定可）
+#   -s, --simulator <name>     unit / app に使うシミュレータ名（IOS_SIMULATORでも指定可）
 #   -h, --help                 このヘルプを表示
 #
 # Examples:
@@ -24,11 +25,12 @@
 #   ./scripts/test.sh e2e -- -g "外部リンク"                       # テスト名で絞り込む
 #   ./scripts/test.sh e2e --url http://localhost:3000/index.html # ローカルのweb/を対象にする
 #   ./scripts/test.sh e2e --ui                                   # UIモードで1件ずつ追う
-#   ./scripts/test.sh unit                                       # ユニットテストのみ
+#   ./scripts/test.sh unit                                       # ロジックのユニットテストのみ
 #   ./scripts/test.sh unit --simulator "iPhone 16"               # シミュレータを指定する
-#   ./scripts/test.sh all                                        # ユニット + E2E
+#   ./scripts/test.sh app                                        # アプリ込みのブリッジのテスト
+#   ./scripts/test.sh all                                        # unit + app + e2e
 #
-# E2Eは既定でe2e/.envのURL（公開中のDebug用ページ）を読み込むため、ネットワーク接続が必要です。
+# e2eとappはどちらも配信中のページを読み込むため、ネットワーク接続が必要です。
 # ローカルのweb/を対象にする場合は、別のシェルで `cd web && pnpm dev` を動かして--urlを渡してください。
 #
 # Playwrightのプロジェクト名: chromium / firefox / webkit / "Mobile Chrome" / "Mobile Safari"
@@ -41,6 +43,8 @@ readonly PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly PROJECT="$PROJECT_ROOT/Webview Interaction Sample.xcodeproj"
 readonly SCHEME="Webview Interaction Sample"
 readonly TEST_TARGET="Webview Interaction SampleTests"
+# アプリを起動して配信中のページを読むテスト。unitではこれらを除いて速さと安定を保つ
+readonly APP_TEST_SUITES=("WebViewBridgeTests")
 readonly E2E_DIR="$PROJECT_ROOT/e2e"
 # シミュレータの既定機種。無ければ利用可能なiPhoneから選び直す
 readonly DEFAULT_SIMULATOR="iPhone 16 Pro"
@@ -59,7 +63,7 @@ usage() {
 
 while (($# > 0)); do
   case "$1" in
-    unit|e2e|all)
+    unit|app|e2e|all)
       scope="$1"
       shift
       ;;
@@ -136,7 +140,9 @@ fallback_simulator() {
       '
 }
 
-run_unit_tests() {
+# $1: unit（アプリ込みのテストを除く） / app（アプリ込みのテストだけ）
+run_xcode_tests() {
+  local target_scope="$1"
   command -v xcodebuild >/dev/null || { echo "error: xcodebuildが見つかりません" >&2; exit 1; }
 
   local udid=""
@@ -170,16 +176,37 @@ run_unit_tests() {
     fi
   fi
 
-  echo "==> ユニットテストを実行します"
+  # アプリ込みのテストは実際にページを読み込むので、unitでは外して速さと安定を保つ
+  local selection=() suite
+  if [[ "$target_scope" == "app" ]]; then
+    for suite in "${APP_TEST_SUITES[@]}"; do
+      selection+=(-only-testing:"$TEST_TARGET/$suite")
+    done
+  else
+    selection+=(-only-testing:"$TEST_TARGET")
+    for suite in "${APP_TEST_SUITES[@]}"; do
+      selection+=(-skip-testing:"$TEST_TARGET/$suite")
+    done
+  fi
+
+  if [[ "$target_scope" == "app" ]]; then
+    echo "==> アプリ込みのテストを実行します"
+  else
+    echo "==> ユニットテストを実行します"
+  fi
+
   if ! xcodebuild test \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "platform=iOS Simulator,id=$udid" \
     -derivedDataPath "$PROJECT_ROOT/.build/TestDerivedData" \
-    -only-testing:"$TEST_TARGET"; then
+    "${selection[@]}"; then
     echo >&2
-    echo "error: ユニットテストに失敗しました" >&2
+    echo "error: テストに失敗しました（$target_scope）" >&2
     echo "シミュレータの起動に失敗している場合は、一度Simulator.appを開いてから再実行してください。" >&2
+    if [[ "$target_scope" == "app" ]]; then
+      echo "アプリ込みのテストは配信中のページを読み込みます。ネットワーク接続も確認してください。" >&2
+    fi
     exit 1
   fi
 }
@@ -246,13 +273,17 @@ run_e2e_tests() {
 
 case "$scope" in
   unit)
-    run_unit_tests
+    run_xcode_tests unit
+    ;;
+  app)
+    run_xcode_tests app
     ;;
   e2e)
     run_e2e_tests
     ;;
   all)
-    run_unit_tests
+    run_xcode_tests unit
+    run_xcode_tests app
     run_e2e_tests
     ;;
 esac

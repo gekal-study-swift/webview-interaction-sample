@@ -31,10 +31,11 @@ Web ページは `window.AndroidInterface` を呼び出します。iOS では同
 | パス | 内容 |
 | --- | --- |
 | `Webview Interaction Sample/` | iOS アプリ本体 |
+| `Webview Interaction SampleTests/` | ロジックのユニットテストと、アプリ込みのブリッジのテスト |
 | `web/` | WebView に表示する Next.js + MUI のページ（Android 版と同じ実装） |
 | `e2e/` | Playwright を使用したエンドツーエンドテスト（ブラウザ上でブリッジをモック） |
 | `scripts/build-and-install.sh` | 実機向けのビルド・インストール・起動 |
-| `scripts/test.sh` | テストの実行（`e2e` / `unit` / `all`） |
+| `scripts/test.sh` | テストの実行（`e2e` / `unit` / `app` / `all`） |
 | `scripts/app-icon/` | アプリアイコンのベクタ原本と生成スクリプト |
 | `.github/workflows/pages.yml` | `web/` をビルドして GitHub Pages へデプロイ |
 | `.github/workflows/playwright.yml` | `e2e/` の Playwright テストを実行 |
@@ -146,27 +147,31 @@ Pull Request ではビルドまでを実行し、デプロイは行いません�
 
 ## テスト
 
-`scripts/test.sh` から実行します。
+`scripts/test.sh` から実行します。三段構えで、ブリッジの両側を分担して見ています。
 
-| 種類 | 対象 | 実行環境 |
-| --- | --- | --- |
-| E2E（`e2e/`、Playwright） | Web 側のロジック | ブラウザ（CI で自動実行） |
-| ユニット（`Webview Interaction SampleTests/`） | UIKit に依存しない Swift のロジック | シミュレータ |
-
-E2E は配信中の Web ページをブラウザで開き、`window.AndroidInterface` をモックして
-Web 側のロジックを検証します（Android 版の `e2e/` と同じ構成）。
-検証するのは**画面の表示とネイティブに渡す引数**までで、
-受け取ったあとのネイティブの挙動は対象外です。
+| スコープ | 対象 | 実行環境 | ブリッジの扱い |
+| --- | --- | --- | --- |
+| `e2e` | Web 側のロジック | ブラウザ（CI で自動実行） | `window.AndroidInterface` をモック |
+| `unit` | UIKit に依存しない Swift のロジック | シミュレータ | 使わない |
+| `app` | アプリ込みのブリッジの往復 | シミュレータ（アプリを起動） | 本物 |
 
 ```shell
 ./scripts/test.sh              # E2E（既定）
 ./scripts/test.sh e2e --project chromium
-./scripts/test.sh unit         # シミュレータでのユニットテスト
-./scripts/test.sh all
+./scripts/test.sh unit         # ロジックのユニットテスト
+./scripts/test.sh app          # アプリ込みのブリッジのテスト
+./scripts/test.sh all          # unit + app + e2e
 ```
 
 依存関係と Playwright のブラウザはスクリプトが必要に応じて取得します。
 `--` の後ろに書いた引数は Playwright にそのまま渡ります（`./scripts/test.sh e2e -- -g "外部リンク"`）。
+
+### E2E（`e2e/`、Playwright）
+
+配信中の Web ページをブラウザで開き、`window.AndroidInterface` をモックして
+Web 側のロジックを検証します（Android 版の `e2e/` と同じ構成）。
+検証するのは**画面の表示とネイティブに渡す引数**までで、
+受け取ったあとのネイティブの挙動は `app` スコープが担当します。
 
 対象の URL は `e2e/.env` の `WEBVIEW_URL` で指定します（既定は公開中の Debug URL）。
 `--url` で上書きできるため、`cd web && pnpm dev` で動かしたローカルのページも対象にできます。
@@ -186,6 +191,40 @@ Web 側のロジックを検証します（Android 版の `e2e/` と同じ構成
 
 アプリ内表示の判定は UA の `Safari/` の有無で分かれるため、
 実行するブラウザに左右されないよう、テスト側で iOS の UA を指定しています。
+
+### ユニット（`Webview Interaction SampleTests/`）
+
+判定・変換のロジックだけを `enum` に切り出してあるため、WebView を起動せずに検証できます。
+
+| ファイル | 内容 |
+| --- | --- |
+| `LinkPolicyTests.swift` | 同一ホストか外部か、`geo:` → マップ URL の変換、`intent://` のフォールバック抽出、未知のモードの既定 |
+| `LoadStateTests.swift` | 読み込み状態の遷移（`about:blank` の除外、キャンセルとエラーの区別、サブフレームの HTTP エラー） |
+| `AppThemeTests.swift` | 配色文字列の解釈と `UserDefaults` への保存 |
+
+### アプリ込み（`WebViewBridgeTests.swift`）
+
+テストバンドルはアプリをホストにして動く（ビルド設定の `TEST_HOST`）ため、
+画面に出ている**本物の `WebViewController` を掴んで `evaluateJavaScript` で DOM を叩けます**。
+Web 側の操作をタップではなく JS で行うのは、デモページが縦に長くタップだと不安定になるためで、
+Android 版の `WebViewDriver` と同じ方針です（`WebViewDriver.swift`）。
+
+Playwright はブリッジをモックするため、ここでしか確かめられないものを担当します。
+
+| 観点 | 内容 |
+| --- | --- |
+| ブリッジの注入 | `web/types/android.d.ts` が宣言する 11 メソッドが実際に生えていること |
+| `showToast()` | ネイティブがトーストを出し、`handleReturnValue('Hello from iOS!')` で呼び返すこと |
+| `getDeviceInfo()` | 実行中のアプリの Bundle ID・OS 名・OS バージョンが返ること |
+| `getBatteryStatus()` | 同期で返せるよう `__updateBatteryStatus()` が用意されていること |
+| `requestNativeCallback()` | 指定した遅延のあと `onNativeEvent()` で応答が返ること |
+| `setAppTheme()` | 受け取った配色が `UserDefaults` にミラーされること |
+| `reloadPage()` | JS の実行コンテキストごと再読み込みされること |
+| `simulateLoadError()` | ネイティブのエラー画面が出て、「再試行」で元のページに戻れること |
+
+配信中のページを読み込むためネットワーク接続が必要です。
+1 つの WebView を共有するので、テストは `.serialized` で直列に実行しています。
+バッテリー残量はシミュレータでは `-1` になるため、実機でのみ 0〜100 を返します。
 
 ## 外部リンクの開き方
 
