@@ -226,7 +226,7 @@ run_xcode_tests() {
   if ((status != 0)); then
     failed_scopes+=("$target_scope")
     echo >&2
-    echo "error: テストに失敗しました（$target_scope）" >&2
+    echo "error: テストに失敗しました（${target_scope}）" >&2
     echo "シミュレータの起動に失敗している場合は、一度Simulator.appを開いてから再実行してください。" >&2
     if [[ "$target_scope" == "app" ]]; then
       echo "アプリ込みのテストは配信中のページを読み込みます。ネットワーク接続も確認してください。" >&2
