@@ -16,6 +16,7 @@
 #   -u, --url <url>            テスト対象のURL（e2e/.envのWEBVIEW_URLを上書き）
 #       --ui                   PlaywrightのUIモードで開く
 #   -s, --simulator <name>     unit / app に使うシミュレータ名（IOS_SIMULATORでも指定可）
+#       --open                 終了後にレポートをブラウザで開く
 #   -h, --help                 このヘルプを表示
 #
 # Examples:
@@ -29,9 +30,13 @@
 #   ./scripts/test.sh unit --simulator "iPhone 16"               # シミュレータを指定する
 #   ./scripts/test.sh app                                        # アプリ込みのブリッジのテスト
 #   ./scripts/test.sh all                                        # unit + app + e2e
+#   ./scripts/test.sh all --open                                 # 終わったらレポートを開く
+#
+# 実行後、結果とキャプチャをまとめたレポートを .build/reports/index.html に生成します
+# （失敗したときも生成します）。作り直すだけなら ./scripts/test-report.py。
 #
 # e2eとappはどちらも配信中のページを読み込むため、ネットワーク接続が必要です。
-# ローカルのweb/を対象にする場合は、別のシェルで `cd web && pnpm dev` を動かして--urlを渡してください。
+# ローカルのweb/を対象にする場合は、別のシェルで `pnpm --dir web dev` を動かして--urlを渡してください。
 #
 # Playwrightのプロジェクト名: chromium / firefox / webkit / "Mobile Chrome" / "Mobile Safari"
 #
@@ -46,6 +51,7 @@ readonly TEST_TARGET="Webview Interaction SampleTests"
 # アプリを起動して配信中のページを読むテスト。unitではこれらを除いて速さと安定を保つ
 readonly APP_TEST_SUITES=("WebViewBridgeTests")
 readonly E2E_DIR="$PROJECT_ROOT/e2e"
+readonly REPORTS_DIR="$PROJECT_ROOT/.build/reports"
 # シミュレータの既定機種。無ければ利用可能なiPhoneから選び直す
 readonly DEFAULT_SIMULATOR="iPhone 16 Pro"
 
@@ -53,6 +59,7 @@ scope="e2e"
 simulator="${IOS_SIMULATOR:-}"
 url="${WEBVIEW_URL:-}"
 ui_mode=false
+open_report=false
 playwright_projects=()
 playwright_args=()
 
@@ -84,6 +91,10 @@ while (($# > 0)); do
       ;;
     --ui)
       ui_mode=true
+      shift
+      ;;
+    --open)
+      open_report=true
       shift
       ;;
     -h|--help)
@@ -195,19 +206,31 @@ run_xcode_tests() {
     echo "==> ユニットテストを実行します"
   fi
 
-  if ! xcodebuild test \
+  # レポート生成が読む結果バンドル。同名が残っているとxcodebuildが失敗するため作り直す
+  mkdir -p "$REPORTS_DIR"
+  local result_bundle="$REPORTS_DIR/$target_scope.xcresult"
+  rm -rf "$result_bundle"
+
+  # 失敗してもレポートを作りたいので、ここでは終了させない
+  set +e
+  xcodebuild test \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -destination "platform=iOS Simulator,id=$udid" \
     -derivedDataPath "$PROJECT_ROOT/.build/TestDerivedData" \
-    "${selection[@]}"; then
+    -resultBundlePath "$result_bundle" \
+    "${selection[@]}"
+  local status=$?
+  set -e
+
+  if ((status != 0)); then
+    failed_scopes+=("$target_scope")
     echo >&2
     echo "error: テストに失敗しました（$target_scope）" >&2
     echo "シミュレータの起動に失敗している場合は、一度Simulator.appを開いてから再実行してください。" >&2
     if [[ "$target_scope" == "app" ]]; then
       echo "アプリ込みのテストは配信中のページを読み込みます。ネットワーク接続も確認してください。" >&2
     fi
-    exit 1
   fi
 }
 
@@ -263,13 +286,15 @@ run_e2e_tests() {
   set -e
 
   if ((status != 0)); then
+    failed_scopes+=("e2e")
     echo >&2
     echo "error: E2Eテストに失敗しました" >&2
-    echo "詳細は次で確認できます: (cd e2e && pnpm exec playwright show-report)" >&2
-    echo "画面キャプチャ: e2e/test-results/" >&2
-    exit "$status"
+    echo "1件ごとの詳細: pnpm --dir e2e exec playwright show-report" >&2
   fi
 }
+
+# 失敗したスコープ。どれか落ちてもレポートまで作ってから終わる
+failed_scopes=()
 
 case "$scope" in
   unit)
@@ -287,5 +312,17 @@ case "$scope" in
     run_e2e_tests
     ;;
 esac
+
+# 結果とキャプチャを1枚にまとめる。失敗したときこそ見たいので、必ず生成する
+report_args=()
+[[ "$open_report" == true ]] && report_args+=(--open)
+if ! "$SCRIPT_DIR/test-report.py" ${report_args[@]+"${report_args[@]}"}; then
+  echo "warning: レポートの生成に失敗しました（結果そのものは上の出力で確認できます）" >&2
+fi
+
+if ((${#failed_scopes[@]} > 0)); then
+  echo "error: 失敗したスコープ: ${failed_scopes[*]}" >&2
+  exit 1
+fi
 
 echo "==> 完了しました"

@@ -22,6 +22,14 @@ struct WebViewBridgeTests {
         return driver
     }
 
+    @Test func demoPage_isReadyOnLaunch() async throws {
+        let driver = try await openDemo()
+
+        // レポートに載せる、起動直後のデモ画面
+        driver.capture("デモ画面")
+        #expect(try await driver.eval("document.title").isEmpty == false)
+    }
+
     @Test func bridge_exposesEveryMethodTheWebPageCalls() async throws {
         let driver = try await openDemo()
 
@@ -65,6 +73,10 @@ struct WebViewBridgeTests {
 
         // ネイティブ側のトーストには、Webから渡した文言がそのまま出る
         try await driver.waitUntil("トーストの表示") { driver.visibleToastMessage == message }
+
+        // 出はじめは半透明のため、フェードインが終わってから撮る
+        try await Task.sleep(for: .milliseconds(300))
+        driver.capture("トースト表示中")
     }
 
     @Test func getDeviceInfo_reportsTheRunningApp() async throws {
@@ -165,11 +177,13 @@ struct WebViewBridgeTests {
         // 到達できないURLを読み込ませ、ネイティブ側のエラー画面に切り替わる
         try await driver.waitUntil("エラー画面の表示", timeout: .seconds(45)) { driver.isShowingErrorScreen }
         #expect(driver.webView.isHidden, "エラー画面を出すときは、失敗したページを残さない")
+        driver.capture("エラー画面")
 
         try driver.tapRetry()
 
         try await driver.waitUntil("エラー画面が閉じること", timeout: .seconds(45)) { !driver.isShowingErrorScreen }
         try await driver.waitUntilReady()
+        driver.capture("再試行のあと")
     }
 }
 
