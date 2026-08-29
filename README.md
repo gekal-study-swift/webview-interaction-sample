@@ -32,9 +32,11 @@ Web ページは `window.AndroidInterface` を呼び出します。iOS では同
 | --- | --- |
 | `Webview Interaction Sample/` | iOS アプリ本体 |
 | `web/` | WebView に表示する Next.js + MUI のページ（Android 版と同じ実装） |
+| `e2e/` | Playwright を使用したエンドツーエンドテスト（ブラウザ上でブリッジをモック） |
 | `scripts/build-and-install.sh` | 実機向けのビルド・インストール・起動 |
 | `scripts/app-icon/` | アプリアイコンのベクタ原本と生成スクリプト |
 | `.github/workflows/pages.yml` | `web/` をビルドして GitHub Pages へデプロイ |
+| `.github/workflows/playwright.yml` | `e2e/` の Playwright テストを実行 |
 
 アプリ本体のファイルは、Android 版と役割を対応させています。
 
@@ -140,6 +142,38 @@ cd web && pnpm build
 `web/public/CNAME` に設定した `webview-interaction-sample.ios.demo.gekal.cn` のルートから配信します。
 `main` への push 時に GitHub Actions がビルドして GitHub Pages へデプロイします。
 Pull Request ではビルドまでを実行し、デプロイは行いません。
+
+## E2E テスト
+
+配信中の Web ページをブラウザで開き、`window.AndroidInterface` をモックして
+Web 側のロジックを検証します（`e2e/`、Android 版と同じ構成）。
+検証するのは**画面の表示とネイティブに渡す引数**までで、
+受け取ったあとのネイティブの挙動は対象外です。
+
+```shell
+cd e2e
+pnpm install
+pnpm exec playwright install    # 初回のみ
+pnpm exec playwright test
+```
+
+対象の URL は `e2e/.env` の `WEBVIEW_URL` で指定します（既定は公開中の Debug URL）。
+`main` への push と Pull Request で GitHub Actions が実行します。
+
+| 観点 | 内容 |
+| --- | --- |
+| ブリッジの往復 | `showToast()` → `handleReturnValue()`、イベントログとコンソールへの出力 |
+| 端末情報 | `getDeviceInfo()` / `getBatteryStatus()` の同期呼び出しと、`__updateBatteryStatus()` での更新 |
+| 非同期コールバック | `requestNativeCallback()` → `onNativeEvent()` |
+| リンク | `tel:` / `mailto:` / `sms:` / `geo:` の href |
+| 外部リンク | 9 つのモードで `openExternalLink()` に渡る URL とモード名、`window.open()` の扱い |
+| アプリ内表示の判定 | `twa.html` が UA とブリッジの有無から表示のされ方を判定すること |
+| ページの読み込み | `reloadPage()` / `simulateLoadError()` |
+| 配色 | 初回マウントと切り替え時の `setAppTheme()` |
+| vConsole | `?vconsole=1` / `0` とビルド時フラグの合成結果 |
+
+アプリ内表示の判定は UA の `Safari/` の有無で分かれるため、
+実行するブラウザに左右されないよう、テスト側で iOS の UA を指定しています。
 
 ## 外部リンクの開き方
 
