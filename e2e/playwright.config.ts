@@ -10,6 +10,19 @@ import * as path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 /**
+ * Playwright の設定。
+ *
+ * 実機は WKWebView（＝WebKit）で動くが、Web 側のロジックが特定のエンジンに依存していない
+ * ことも見たいので、Android 版と同じく 5 つのブラウザで流す。
+ *
+ * 実行例:
+ *
+ * ```shell
+ * ./scripts/test.sh                                # 5 つすべて
+ * ./scripts/test.sh e2e --project webkit           # 実機に一番近い WebKit だけ
+ * ./scripts/test.sh e2e --project "Mobile Safari"  # iPhone の画面サイズで
+ * ```
+ *
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({

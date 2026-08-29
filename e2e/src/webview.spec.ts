@@ -1,3 +1,25 @@
+/**
+ * WebView に表示する Web ページの E2E テスト。
+ *
+ * 配信中のページをブラウザで開き、ネイティブが注入する `window.AndroidInterface` を
+ * モックして、画面の表示とネイティブに渡す引数までを検証する。
+ * 受け取ったあとのネイティブの挙動（トーストの表示、SFSafariViewController の起動など）は
+ * ブラウザでは再現できないため対象外。
+ *
+ * 実行例:
+ *
+ * ```shell
+ * ./scripts/test.sh                                            # 5 つのブラウザすべてで実行
+ * ./scripts/test.sh e2e --project chromium                     # 1 つのブラウザだけで実行
+ * ./scripts/test.sh e2e -- -g "外部リンク"                       # テスト名で絞り込む
+ * ./scripts/test.sh e2e --url http://localhost:3000/index.html # ローカルの web/ を対象にする
+ * ./scripts/test.sh e2e --ui                                   # UI モードで 1 件ずつ追う
+ * ```
+ *
+ * 対象の URL は `e2e/.env` の `WEBVIEW_URL`（`--url` で上書きできる）。
+ * モックしているブリッジの実物は `Webview Interaction Sample/WebViewController.swift` の
+ * `bridgeScript()` にあり、型定義は `web/types/android.d.ts`。
+ */
 import { test, expect, type Page } from '@playwright/test';
 
 const WEBVIEW_URL = process.env.WEBVIEW_URL ?? 'http://localhost:3000/index.html';

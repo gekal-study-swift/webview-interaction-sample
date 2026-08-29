@@ -1,8 +1,33 @@
 #!/usr/bin/env bash
-
+#
+# 実機向けにビルドしてインストールする。
+#
+# Usage:
+#   ./scripts/build-and-install.sh [options]
+#
+# Options:
+#   -d, --device <value>       インストール先のIDまたは端末名（IOS_DEVICEでも指定可）
+#   -c, --configuration <name> DebugまたはRelease（既定: Debug）
+#       --team <team-id>       Apple Developer Team ID（DEVELOPMENT_TEAMでも指定可）
+#       --no-launch            インストール後にアプリを起動しない
+#   -h, --help                 このヘルプを表示
+#
+# Examples:
+#   ./scripts/build-and-install.sh                                          # 端末を検出してDebugを入れる
+#   ./scripts/build-and-install.sh --device 00008110-001234567890001E       # 端末IDを指定する
+#   ./scripts/build-and-install.sh --device "Gekal's iPhone"                # 端末名でも指定できる
+#   ./scripts/build-and-install.sh --device "Gekal's iPhone" --team ABCDE12345
+#   ./scripts/build-and-install.sh --configuration Release --no-launch      # 入れるだけで起動しない
+#   IOS_DEVICE=00008110-001234567890001E ./scripts/build-and-install.sh     # 環境変数でも指定できる
+#
+# --deviceを省略するとiOS端末を検出します。1台なら自動選択し、複数なら一覧から選択します。
+# 接続端末は次のコマンドでも確認できます:
+#   xcrun devicectl list devices
+#
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 readonly PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly PROJECT="$PROJECT_ROOT/Webview Interaction Sample.xcodeproj"
 readonly SCHEME="Webview Interaction Sample"
@@ -13,28 +38,9 @@ configuration="Debug"
 team="${DEVELOPMENT_TEAM:-}"
 launch=true
 
+# 先頭の説明コメントをそのまま表示する。書く場所を1か所にして食い違いを防ぐ
 usage() {
-  cat <<'USAGE'
-Usage:
-  ./scripts/build-and-install.sh [options]
-
-Options:
-  -d, --device <value>       インストール先のIDまたは端末名（IOS_DEVICEでも指定可）
-  -c, --configuration <name> DebugまたはRelease（既定: Debug）
-      --team <team-id>       Apple Developer Team ID（DEVELOPMENT_TEAMでも指定可）
-      --no-launch            インストール後にアプリを起動しない
-  -h, --help                 このヘルプを表示
-
-Examples:
-  ./scripts/build-and-install.sh
-  ./scripts/build-and-install.sh --device 00008110-001234567890001E
-  ./scripts/build-and-install.sh --device "Gekal's iPhone" --team ABCDE12345
-  IOS_DEVICE=00008110-001234567890001E ./scripts/build-and-install.sh
-
---deviceを省略するとiOS端末を検出します。1台なら自動選択し、複数なら一覧から選択します。
-接続端末は次のコマンドでも確認できます:
-  xcrun devicectl list devices
-USAGE
+  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$SELF"
 }
 
 while (($# > 0)); do

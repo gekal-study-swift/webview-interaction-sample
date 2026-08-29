@@ -34,6 +34,7 @@ Web ページは `window.AndroidInterface` を呼び出します。iOS では同
 | `web/` | WebView に表示する Next.js + MUI のページ（Android 版と同じ実装） |
 | `e2e/` | Playwright を使用したエンドツーエンドテスト（ブラウザ上でブリッジをモック） |
 | `scripts/build-and-install.sh` | 実機向けのビルド・インストール・起動 |
+| `scripts/test.sh` | テストの実行（`e2e` / `unit` / `all`） |
 | `scripts/app-icon/` | アプリアイコンのベクタ原本と生成スクリプト |
 | `.github/workflows/pages.yml` | `web/` をビルドして GitHub Pages へデプロイ |
 | `.github/workflows/playwright.yml` | `e2e/` の Playwright テストを実行 |
@@ -143,21 +144,32 @@ cd web && pnpm build
 `main` への push 時に GitHub Actions がビルドして GitHub Pages へデプロイします。
 Pull Request ではビルドまでを実行し、デプロイは行いません。
 
-## E2E テスト
+## テスト
 
-配信中の Web ページをブラウザで開き、`window.AndroidInterface` をモックして
-Web 側のロジックを検証します（`e2e/`、Android 版と同じ構成）。
+`scripts/test.sh` から実行します。
+
+| 種類 | 対象 | 実行環境 |
+| --- | --- | --- |
+| E2E（`e2e/`、Playwright） | Web 側のロジック | ブラウザ（CI で自動実行） |
+| ユニット（`Webview Interaction SampleTests/`） | UIKit に依存しない Swift のロジック | シミュレータ |
+
+E2E は配信中の Web ページをブラウザで開き、`window.AndroidInterface` をモックして
+Web 側のロジックを検証します（Android 版の `e2e/` と同じ構成）。
 検証するのは**画面の表示とネイティブに渡す引数**までで、
 受け取ったあとのネイティブの挙動は対象外です。
 
 ```shell
-cd e2e
-pnpm install
-pnpm exec playwright install    # 初回のみ
-pnpm exec playwright test
+./scripts/test.sh              # E2E（既定）
+./scripts/test.sh e2e --project chromium
+./scripts/test.sh unit         # シミュレータでのユニットテスト
+./scripts/test.sh all
 ```
 
+依存関係と Playwright のブラウザはスクリプトが必要に応じて取得します。
+`--` の後ろに書いた引数は Playwright にそのまま渡ります（`./scripts/test.sh e2e -- -g "外部リンク"`）。
+
 対象の URL は `e2e/.env` の `WEBVIEW_URL` で指定します（既定は公開中の Debug URL）。
+`--url` で上書きできるため、`cd web && pnpm dev` で動かしたローカルのページも対象にできます。
 `main` への push と Pull Request で GitHub Actions が実行します。
 
 | 観点 | 内容 |
