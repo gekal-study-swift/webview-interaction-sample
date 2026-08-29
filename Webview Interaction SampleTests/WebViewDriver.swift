@@ -90,6 +90,29 @@ struct WebViewDriver {
         throw DriverError("タイムアウトしました: \(description)")
     }
 
+    /// 画面の様子をテスト結果に添付する。
+    ///
+    /// 添付したPNGは`.xcresult`に入り、`scripts/test-report.py`が取り出してレポートに並べる。
+    /// 失敗したときに「何が出ていたのか」を後から見られるようにするため、
+    /// 各テストの節目で呼ぶ（Android版の`ScreenshotRule`に相当）。
+    func capture(_ name: String) {
+        guard let image = Self.screenshot(), let png = image.pngData() else { return }
+        Attachment.record(png, named: "\(name).png")
+    }
+
+    /// 表示中のウィンドウを1枚に重ねて描画する。
+    /// トーストはアプリとは別のウィンドウに載るため、1つだけ描くと写らない。
+    private static func screenshot() -> UIImage? {
+        let visible = windows.filter { !$0.isHidden && $0.bounds.width > 0 }
+        guard let bounds = visible.first?.bounds else { return nil }
+
+        return UIGraphicsImageRenderer(bounds: bounds).image { _ in
+            for window in visible {
+                window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+            }
+        }
+    }
+
     /// 画面に出ているトーストの文言。出ていなければnil。
     ///
     /// トーストはアプリのウィンドウとは別の専用ウィンドウに載る（``Toast``）ため、

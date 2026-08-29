@@ -36,6 +36,7 @@ Web ページは `window.AndroidInterface` を呼び出します。iOS では同
 | `e2e/` | Playwright を使用したエンドツーエンドテスト（ブラウザ上でブリッジをモック） |
 | `scripts/build-and-install.sh` | 実機向けのビルド・インストール・起動 |
 | `scripts/test.sh` | テストの実行（`e2e` / `unit` / `app` / `all`） |
+| `scripts/test-report.py` | テスト結果とキャプチャを 1 枚の HTML にまとめる |
 | `scripts/app-icon/` | アプリアイコンのベクタ原本と生成スクリプト |
 | `.github/workflows/pages.yml` | `web/` をビルドして GitHub Pages へデプロイ |
 | `.github/workflows/playwright.yml` | `e2e/` の Playwright テストを実行 |
@@ -132,13 +133,14 @@ Development Team はプロジェクト設定の `DEVELOPMENT_TEAM`（`N8RU3D7VY6
 Android 版と同じ Next.js + MUI の実装を `web/` に置いています。
 
 ```shell
-cd web && pnpm install --frozen-lockfile && pnpm dev
+pnpm --dir web install --frozen-lockfile
+pnpm --dir web dev
 ```
 
 静的サイトを生成する場合は次のとおりです。成果物は `web/out` に出力されます。
 
 ```shell
-cd web && pnpm build
+pnpm --dir web build
 ```
 
 `web/public/CNAME` に設定した `webview-interaction-sample.ios.demo.gekal.cn` のルートから配信します。
@@ -161,10 +163,39 @@ Pull Request ではビルドまでを実行し、デプロイは行いません�
 ./scripts/test.sh unit         # ロジックのユニットテスト
 ./scripts/test.sh app          # アプリ込みのブリッジのテスト
 ./scripts/test.sh all          # unit + app + e2e
+./scripts/test.sh all --open   # 終わったらレポートを開く
 ```
 
 依存関係と Playwright のブラウザはスクリプトが必要に応じて取得します。
 `--` の後ろに書いた引数は Playwright にそのまま渡ります（`./scripts/test.sh e2e -- -g "外部リンク"`）。
+
+### レポート
+
+実行が終わると、結果とキャプチャを 1 枚にまとめたレポートを生成します（失敗したときも生成します）。
+
+```
+.build/reports/index.html
+```
+
+| 載るもの | 元データ |
+| --- | --- |
+| スコープごとの成否・件数・実行時間・実行環境 | `.build/reports/{unit,app}.xcresult` と `e2e/test-results/results.json` |
+| 失敗の詳細 | 同上 |
+| アプリ込みのテストのキャプチャ | `.xcresult` の添付（`WebViewDriver.capture()`） |
+| E2E のキャプチャ | `e2e/test-results/screenshots/` |
+
+テストを流し直さずに作り直すこともできます。
+
+```shell
+./scripts/test-report.py         # 直近の結果から再生成
+./scripts/test-report.py --open  # 生成してブラウザで開く
+```
+
+1 件ごとの実行内容やトレースは Playwright 自身のレポートが詳しいので、そちらは残したまま参照しています。
+
+```shell
+pnpm --dir e2e exec playwright show-report
+```
 
 ### E2E（`e2e/`、Playwright）
 
@@ -174,7 +205,7 @@ Web 側のロジックを検証します（Android 版の `e2e/` と同じ構成
 受け取ったあとのネイティブの挙動は `app` スコープが担当します。
 
 対象の URL は `e2e/.env` の `WEBVIEW_URL` で指定します（既定は公開中の Debug URL）。
-`--url` で上書きできるため、`cd web && pnpm dev` で動かしたローカルのページも対象にできます。
+`--url` で上書きできるため、`pnpm --dir web dev` で動かしたローカルのページも対象にできます。
 `main` への push と Pull Request で GitHub Actions が実行します。
 
 | 観点 | 内容 |
