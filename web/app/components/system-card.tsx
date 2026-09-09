@@ -15,7 +15,6 @@ import TuneIcon from '@mui/icons-material/Tune';
 import VibrationIcon from '@mui/icons-material/Vibration';
 
 import { useBridge } from '../bridge-provider';
-import { dictionaryOffInputProps, useDictionarySafeInput } from '../hooks/use-dictionary-safe-input';
 import { SectionCard } from './section-card';
 
 const PATTERNS: Record<string, number> = { 短い: 80, 標準: 300, 長い: 800 };
@@ -24,8 +23,6 @@ export function SystemCard() {
   const { hydrated, callNative, notify } = useBridge();
   const [duration, setDuration] = useState(300);
   const [text, setText] = useState('WebView Interaction Sample');
-  // 日本語 IME の変換確定などを取りこぼさないための同期（辞書系は下の htmlInput で無効化）
-  const textInput = useDictionarySafeInput(text, setText);
 
   const copy = () => {
     callNative('copyToClipboard', ['WebView Sample', text]);
@@ -89,9 +86,7 @@ export function SystemCard() {
           <TextField
             label="テキスト"
             value={text}
-            onChange={textInput.onChange}
-            inputRef={textInput.inputRef}
-            slotProps={{ htmlInput: dictionaryOffInputProps }}
+            onChange={(event) => setText(event.target.value)}
             multiline
             minRows={2}
           />
