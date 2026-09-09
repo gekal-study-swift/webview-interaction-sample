@@ -459,13 +459,12 @@ test.describe('カラーテーマ', () => {
 });
 
 test.describe('キーボードの辞書からの自動入力', () => {
-  // 入力欄はユーザ辞書・自動補完・自動修正をオフにしている（dictionaryOffInputProps）。
-  // ただし日本語の変換（かな→漢字）は composition として通るため、その確定を
-  // web/app/hooks/use-dictionary-safe-input.ts が取りこぼさないことを送信引数で確かめる。
+  // 入力欄はユーザ辞書のテキスト置換を無効化しつつ、日本語の変換（かな→漢字）は
+  // composition として通るため取りこぼさない（web/app/hooks/use-dictionary-safe-input.ts）。
   const messageField = (page: Page) => page.getByRole('textbox', { name: 'トーストのメッセージ' });
   const eventLog = (page: Page) => page.getByRole('list', { name: 'イベントログ' });
 
-  test('should opt the input fields out of the keyboard dictionary', async ({ page }) => {
+  test('should opt the input fields out of autocomplete / autocorrect / spellcheck', async ({ page }) => {
     await openDemo(page);
 
     for (const field of [messageField(page), page.getByRole('textbox', { name: 'テキスト' })]) {
@@ -476,7 +475,34 @@ test.describe('キーボードの辞書からの自動入力', () => {
     }
   });
 
-  test('should sync ordinary typing even though the React onChange is a no-op', async ({ page }) => {
+  test('should block a user-dictionary text replacement via beforeinput', async ({ page }) => {
+    await openDemo(page);
+
+    const field = messageField(page);
+    await field.click();
+    await field.fill('omw');
+
+    // WKWebView がテキスト置換を適用する直前の beforeinput が打ち消されること
+    const prevented = await field.evaluate((el: HTMLInputElement) => {
+      const event = new InputEvent('beforeinput', {
+        inputType: 'insertReplacementText',
+        data: 'On my way!',
+        bubbles: true,
+        cancelable: true,
+      });
+      el.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(prevented).toBe(true);
+
+    // 打った文字はそのまま。Show Toast にも展開後の文字列は渡らない
+    await expect(field).toHaveValue('omw');
+    await page.getByRole('button', { name: 'Show Toast' }).click();
+    await expect(eventLog(page).getByText("showToast('omw')")).toBeVisible();
+    await expect(eventLog(page).getByText("showToast('On my way!')")).toHaveCount(0);
+  });
+
+  test('should sync ordinary typing', async ({ page }) => {
     await openDemo(page);
 
     const field = messageField(page);
@@ -484,18 +510,19 @@ test.describe('キーボードの辞書からの自動入力', () => {
     await field.fill('');
     await field.pressSequentially('やあ');
 
+    await expect(field).toHaveValue('やあ');
     await page.getByRole('button', { name: 'Show Toast' }).click();
     await expect(eventLog(page).getByText("showToast('やあ')")).toBeVisible();
   });
 
-  test('should still sync a text-replacement expansion if one slips through', async ({ page }) => {
+  test('should still sync a text replacement if one slips through beforeinput', async ({ page }) => {
     await openDemo(page);
 
     const field = messageField(page);
     await field.click();
     await field.fill('omw');
 
-    // autocorrect="off" で実機では起きないが、万一 insertReplacementText が来ても取りこぼさない
+    // beforeinput を止められなかった場合でも、展開後の文字は取りこぼさない
     await field.evaluate((el: HTMLInputElement) => {
       el.value = 'On my way!';
       el.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', bubbles: true }));
@@ -505,7 +532,7 @@ test.describe('キーボードの辞書からの自動入力', () => {
     await expect(eventLog(page).getByText("showToast('On my way!')")).toBeVisible();
   });
 
-  test('should apply a dictionary candidate only after the IME commits', async ({ page }) => {
+  test('should keep the text after a Japanese IME conversion', async ({ page }) => {
     await openDemo(page);
 
     const field = messageField(page);
@@ -522,12 +549,12 @@ test.describe('キーボードの辞書からの自動入力', () => {
     await expect(eventLog(page).getByText("showToast('メモ')")).toBeVisible();
     await expect(eventLog(page).getByText("showToast('メモか')")).toHaveCount(0);
 
-    // 確定：compositionend で登録語がまとめて入る
+    // 確定：compositionend で確定文字列がまとめて入り、React に消されない
     await field.evaluate((el: HTMLInputElement) => {
       el.value = 'メモ書き';
       el.dispatchEvent(new CompositionEvent('compositionend', { data: '書き', bubbles: true }));
-      el.dispatchEvent(new InputEvent('input', { inputType: 'insertFromComposition', bubbles: true }));
     });
+    await expect(field).toHaveValue('メモ書き');
     await page.getByRole('button', { name: 'Show Toast' }).click();
     await expect(eventLog(page).getByText("showToast('メモ書き')")).toBeVisible();
   });

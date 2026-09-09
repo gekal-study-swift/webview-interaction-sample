@@ -150,16 +150,20 @@ Pull Request ではビルドまでを実行し、デプロイは行いません�
 ### キーボードの辞書と入力欄
 
 トースト表示・端末機能の呼び出しの入力欄は、一時的なテキストを入れるだけなので
-キーボードの辞書や候補が邪魔になります。`web/app/hooks/use-dictionary-safe-input.ts` の
-`dictionaryOffInputProps`（`autocomplete` / `autocorrect` / `autocapitalize` / `spellcheck` を
-オフ）を `htmlInput` に渡し、ユーザ辞書のテキスト置換・自動補完・自動修正を切っています。
-iOS では `autocorrect="off"` がテキスト置換の自動展開（`insertReplacementText`）も抑止します。
+キーボードの辞書や候補が邪魔になります。`web/app/hooks/use-dictionary-safe-input.ts` で
+次の 2 つを行います。
 
-一方、日本語の変換（かな→漢字）は `composition` として必ず通ります。WKWebView は
-未確定文字がある状態での確定時に `value` の再適用とタイミングが競合し、末尾の 1 文字が
-欠けたりカーソルが飛んだりすることがあるため、同フックが入力要素のネイティブ
-`input` / `compositionend` を直接購読し、実際の `element.value` を唯一の真実として
-state へ戻します（composition 中の中間 `input` は無視）。
+- `dictionaryOffInputProps`（`autocomplete` / `autocorrect` / `autocapitalize` / `spellcheck` を
+  オフ）を `htmlInput` に渡す。ただし iOS 26 ではこれだけではユーザ辞書のテキスト置換は
+  止まらないため、`beforeinput` の `inputType === 'insertReplacementText'` を `preventDefault()`
+  して自動展開（`omw` → `On my way!` など）を打ち消す。打った文字はそのまま残る。
+
+- 日本語の変換（かな→漢字）は `composition` として必ず通る。`onChange` は通常どおり
+  state を更新するが、変換中の中間 `onChange` は無視し、`compositionend` で確定値を
+  まとめて反映する。WKWebView は `compositionend` の後に `onChange` を出さないことがあり、
+  `onChange` を no-op にすると React が制御コンポーネントの `value` を戻して変換した文字が
+  消えるため、実ハンドラのまま `compositionend` で直接 state へ入れる。保険として
+  ネイティブ `input` も購読し、`element.value` がずれていたら戻す。
 
 回帰テストは E2E（`e2e/src/webview.spec.ts` の「キーボードの辞書からの自動入力」、WebKit を含む
 5 ブラウザ）に加え、本物の WKWebView 上での確認を `WebViewBridgeTests.swift` にも用意しています
