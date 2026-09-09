@@ -147,28 +147,6 @@ pnpm --dir web build
 `main` への push 時に GitHub Actions がビルドして GitHub Pages へデプロイします。
 Pull Request ではビルドまでを実行し、デプロイは行いません。
 
-### キーボードの辞書と入力欄
-
-トースト表示・端末機能の呼び出しの入力欄は、一時的なテキストを入れるだけなので
-キーボードの辞書や候補が邪魔になります。`web/app/hooks/use-dictionary-safe-input.ts` で
-次の 2 つを行います。
-
-- `dictionaryOffInputProps`（`autocomplete` / `autocorrect` / `autocapitalize` / `spellcheck` を
-  オフ）を `htmlInput` に渡す。ただし iOS 26 ではこれだけではユーザ辞書のテキスト置換は
-  止まらないため、`beforeinput` の `inputType === 'insertReplacementText'` を `preventDefault()`
-  して自動展開（`omw` → `On my way!` など）を打ち消す。打った文字はそのまま残る。
-
-- 日本語の変換（かな→漢字）は `composition` として必ず通る。`onChange` は通常どおり
-  state を更新するが、変換中の中間 `onChange` は無視し、`compositionend` で確定値を
-  まとめて反映する。WKWebView は `compositionend` の後に `onChange` を出さないことがあり、
-  `onChange` を no-op にすると React が制御コンポーネントの `value` を戻して変換した文字が
-  消えるため、実ハンドラのまま `compositionend` で直接 state へ入れる。保険として
-  ネイティブ `input` も購読し、`element.value` がずれていたら戻す。
-
-回帰テストは E2E（`e2e/src/webview.spec.ts` の「キーボードの辞書からの自動入力」、WebKit を含む
-5 ブラウザ）に加え、本物の WKWebView 上での確認を `WebViewBridgeTests.swift` にも用意しています
-（後者は修正が本番へ反映されるまで `.disabled`）。
-
 ## テスト
 
 `scripts/test.sh` から実行します。三段構えで、ブリッジの両側を分担して見ています。
@@ -246,7 +224,6 @@ Web 側のロジックを検証します（Android 版の `e2e/` と同じ構成
 | ページの読み込み | `reloadPage()` / `simulateLoadError()` |
 | 配色 | 初回マウントと切り替え時の `setAppTheme()` |
 | vConsole | `?vconsole=1` / `0` とビルド時フラグの合成結果 |
-| キーボードの辞書からの自動入力 | テキスト置換（`insertReplacementText`）と IME の `composition` 確定で、展開・確定後の文言が取りこぼされずネイティブへ渡ること |
 
 アプリ内表示の判定は UA の `Safari/` の有無で分かれるため、
 実行するブラウザに左右されないよう、テスト側で iOS の UA を指定しています。
@@ -280,7 +257,6 @@ Playwright はブリッジをモックするため、ここでしか確かめら
 | `setAppTheme()` | 受け取った配色が `UserDefaults` にミラーされること |
 | `reloadPage()` | JS の実行コンテキストごと再読み込みされること |
 | `simulateLoadError()` | ネイティブのエラー画面が出て、「再試行」で元のページに戻れること |
-| キーボードの辞書からの自動入力（`.disabled`） | テキスト置換の `insertReplacementText` と IME の `composition` 確定を本物の WKWebView へ流し、展開・確定後の文言だけがネイティブへ渡ること。修正が本番へ反映されるまで無効化中 |
 
 配信中のページを読み込むためネットワーク接続が必要です。
 1 つの WebView を共有するので、テストは `.serialized` で直列に実行しています。
