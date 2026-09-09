@@ -147,6 +147,21 @@ pnpm --dir web build
 `main` への push 時に GitHub Actions がビルドして GitHub Pages へデプロイします。
 Pull Request ではビルドまでを実行し、デプロイは行いません。
 
+### キーボードの辞書からの自動入力
+
+iOS のユーザ辞書（設定 > 一般 > キーボード > ユーザ辞書）によるテキスト置換や、
+日本語の予測変換バーからの確定は、WKWebView 上で `insertReplacementText` の `input` や
+`compositionend` として届きます。React の制御コンポーネントはこのとき `value` の再適用と
+タイミングが競合し、末尾の 1 文字が欠けたりカーソルが飛んだりすることがあります。
+
+`web/app/hooks/use-dictionary-safe-input.ts` で、入力要素のネイティブ `input` /
+`compositionend` を直接購読し、実際の `element.value` を唯一の真実として state へ戻します
+（composition 中の中間 `input` は無視）。トースト表示と端末機能の呼び出しの入力欄で使用しています。
+
+回帰テストは E2E（`e2e/src/webview.spec.ts` の「キーボードの辞書からの自動入力」、WebKit を含む
+5 ブラウザ）に加え、本物の WKWebView 上での確認を `WebViewBridgeTests.swift` にも用意しています
+（後者は修正が本番へ反映されるまで `.disabled`）。
+
 ## テスト
 
 `scripts/test.sh` から実行します。三段構えで、ブリッジの両側を分担して見ています。
@@ -224,6 +239,7 @@ Web 側のロジックを検証します（Android 版の `e2e/` と同じ構成
 | ページの読み込み | `reloadPage()` / `simulateLoadError()` |
 | 配色 | 初回マウントと切り替え時の `setAppTheme()` |
 | vConsole | `?vconsole=1` / `0` とビルド時フラグの合成結果 |
+| キーボードの辞書からの自動入力 | テキスト置換（`insertReplacementText`）と IME の `composition` 確定で、展開・確定後の文言が取りこぼされずネイティブへ渡ること |
 
 アプリ内表示の判定は UA の `Safari/` の有無で分かれるため、
 実行するブラウザに左右されないよう、テスト側で iOS の UA を指定しています。
@@ -257,6 +273,7 @@ Playwright はブリッジをモックするため、ここでしか確かめら
 | `setAppTheme()` | 受け取った配色が `UserDefaults` にミラーされること |
 | `reloadPage()` | JS の実行コンテキストごと再読み込みされること |
 | `simulateLoadError()` | ネイティブのエラー画面が出て、「再試行」で元のページに戻れること |
+| キーボードの辞書からの自動入力（`.disabled`） | テキスト置換の `insertReplacementText` と IME の `composition` 確定を本物の WKWebView へ流し、展開・確定後の文言だけがネイティブへ渡ること。修正が本番へ反映されるまで無効化中 |
 
 配信中のページを読み込むためネットワーク接続が必要です。
 1 つの WebView を共有するので、テストは `.serialized` で直列に実行しています。

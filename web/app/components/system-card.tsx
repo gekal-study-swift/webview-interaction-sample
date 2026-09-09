@@ -15,6 +15,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import VibrationIcon from '@mui/icons-material/Vibration';
 
 import { useBridge } from '../bridge-provider';
+import { useDictionarySafeInput } from '../hooks/use-dictionary-safe-input';
 import { SectionCard } from './section-card';
 
 const PATTERNS: Record<string, number> = { 短い: 80, 標準: 300, 長い: 800 };
@@ -23,6 +24,8 @@ export function SystemCard() {
   const { hydrated, callNative, notify } = useBridge();
   const [duration, setDuration] = useState(300);
   const [text, setText] = useState('WebView Interaction Sample');
+  // iOS のユーザ辞書・予測変換による自動入力を取りこぼさないための同期
+  const textInput = useDictionarySafeInput(text, setText);
 
   const copy = () => {
     callNative('copyToClipboard', ['WebView Sample', text]);
@@ -86,7 +89,8 @@ export function SystemCard() {
           <TextField
             label="テキスト"
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={textInput.onChange}
+            inputRef={textInput.inputRef}
             multiline
             minRows={2}
           />

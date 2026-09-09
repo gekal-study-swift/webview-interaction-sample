@@ -457,3 +457,67 @@ test.describe('カラーテーマ', () => {
     });
   });
 });
+
+test.describe('キーボードの辞書からの自動入力', () => {
+  // iOS のユーザ辞書（テキスト置換）や日本語の予測変換で入る文字は、React の合成 onChange ではなく
+  // 要素のネイティブ input / compositionend として届く。web/app/hooks/use-dictionary-safe-input.ts が
+  // element.value を state に同期できているか（＝末尾を取りこぼさないか）を、送信引数で確かめる。
+  const messageField = (page: Page) => page.getByRole('textbox', { name: 'トーストのメッセージ' });
+  const eventLog = (page: Page) => page.getByRole('list', { name: 'イベントログ' });
+
+  test('should sync ordinary typing even though the React onChange is a no-op', async ({ page }) => {
+    await openDemo(page);
+
+    const field = messageField(page);
+    await field.click();
+    await field.fill('');
+    await field.pressSequentially('やあ');
+
+    await page.getByRole('button', { name: 'Show Toast' }).click();
+    await expect(eventLog(page).getByText("showToast('やあ')")).toBeVisible();
+  });
+
+  test('should sync a text-replacement expansion (insertReplacementText)', async ({ page }) => {
+    await openDemo(page);
+
+    const field = messageField(page);
+    await field.click();
+    await field.fill('omw');
+
+    // WKWebView がユーザ辞書のテキスト置換を適用したときに出すイベントを再現する
+    await field.evaluate((el: HTMLInputElement) => {
+      el.value = 'On my way!';
+      el.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', bubbles: true }));
+    });
+
+    await page.getByRole('button', { name: 'Show Toast' }).click();
+    await expect(eventLog(page).getByText("showToast('On my way!')")).toBeVisible();
+  });
+
+  test('should apply a dictionary candidate only after the IME commits', async ({ page }) => {
+    await openDemo(page);
+
+    const field = messageField(page);
+    await field.click();
+    await field.fill('メモ');
+
+    // 変換中：未確定の中間 input は state に入れない
+    await field.evaluate((el: HTMLInputElement) => {
+      el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      el.value = 'メモか';
+      el.dispatchEvent(new InputEvent('input', { inputType: 'insertCompositionText', data: 'か', bubbles: true }));
+    });
+    await page.getByRole('button', { name: 'Show Toast' }).click();
+    await expect(eventLog(page).getByText("showToast('メモ')")).toBeVisible();
+    await expect(eventLog(page).getByText("showToast('メモか')")).toHaveCount(0);
+
+    // 確定：compositionend で登録語がまとめて入る
+    await field.evaluate((el: HTMLInputElement) => {
+      el.value = 'メモ書き';
+      el.dispatchEvent(new CompositionEvent('compositionend', { data: '書き', bubbles: true }));
+      el.dispatchEvent(new InputEvent('input', { inputType: 'insertFromComposition', bubbles: true }));
+    });
+    await page.getByRole('button', { name: 'Show Toast' }).click();
+    await expect(eventLog(page).getByText("showToast('メモ書き')")).toBeVisible();
+  });
+});
