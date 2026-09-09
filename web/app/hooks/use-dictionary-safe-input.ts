@@ -5,13 +5,30 @@ import { useCallback, useEffect, useRef } from 'react';
 type InputElement = HTMLInputElement | HTMLTextAreaElement;
 
 /**
- * iOS のユーザ辞書（テキスト置換）や日本語の予測変換で入る文字を、
- * React の制御コンポーネントで取りこぼさないための同期フック。
+ * ユーザ辞書（テキスト置換）・自動補完・自動修正・スペルチェックを入力欄で無効化する属性。
  *
- * WKWebView / Safari は次のケースで、React による `value` の再適用と
+ * トーストの文言やコピー用テキストのような一時的な入力では、キーボードの辞書や
+ * QuickType の候補がかえって邪魔になるため、これらを切る。iOS では `autocorrect="off"`
+ * がテキスト置換の自動展開（`insertReplacementText`）も含めて抑止する。
+ *
+ * MUI TextField には `slotProps={{ htmlInput: { ...dictionaryOffInputProps } }}` で渡す。
+ */
+export const dictionaryOffInputProps = {
+  autoComplete: 'off',
+  autoCorrect: 'off',
+  autoCapitalize: 'off',
+  spellCheck: false,
+} as const;
+
+/**
+ * 日本語 IME の変換確定などで入る文字を、React の制御コンポーネントで
+ * 取りこぼさないための同期フック。
+ *
+ * WKWebView / Safari は、IME の未確定文字がある状態での変換確定や
+ * `insertReplacementText` のときに、React による `value` の再適用と
  * タイミングが競合し、末尾の 1 文字が欠ける・カーソルが先頭へ飛ぶことがある。
- *   - テキスト置換の自動展開（`input` の inputType が `insertReplacementText`）
- *   - 日本語 IME の未確定文字がある状態での変換確定
+ * `dictionaryOffInputProps` で辞書系は切っているが、日本語の変換（かな→漢字）は
+ * composition として必ず通るため、その取りこぼしはこのフックで防ぐ。
  *
  * 対策として React の合成 `onChange` には頼らず、要素のネイティブ
  * `input` / `compositionend` を直接購読し、実際の `element.value` を

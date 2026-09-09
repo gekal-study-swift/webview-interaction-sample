@@ -158,12 +158,13 @@ struct WebViewBridgeTests {
         try await driver.waitUntil("配色の保存") { ThemePreference.load() == .light }
     }
 
-    /// iOS のユーザ辞書（テキスト置換）や日本語の予測変換で入る文字を、
-    /// 制御コンポーネントが取りこぼさないこと（`web/app/hooks/use-dictionary-safe-input.ts`）。
+    /// 日本語 IME の変換確定などで入る文字を、制御コンポーネントが取りこぼさないこと
+    /// （`web/app/hooks/use-dictionary-safe-input.ts`）。
     ///
     /// キーボードのユーザ辞書登録や QuickType バーのタップは自動化できないため、
-    /// WKWebView がそれらの確定時に出す DOM イベント列を、実機シミュレータ上の
-    /// 本物の WebView へ流し込み、ネイティブへ渡る文言で同期を確かめる。
+    /// WKWebView が確定時に出す DOM イベント列を、実機シミュレータ上の本物の WebView へ
+    /// 流し込み、ネイティブへ渡る文言で同期を確かめる。入力欄では `autocorrect="off"` 等で
+    /// 辞書系を切っているため、`insertReplacementText` は万一漏れた場合の防御確認。
     ///
     /// `web/app/hooks/use-dictionary-safe-input.ts` を含む `web/` が本番へデプロイされるまで、
     /// このテストが読み込む配信中のページには修正が入っていないため無効化している。

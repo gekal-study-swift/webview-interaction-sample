@@ -147,16 +147,19 @@ pnpm --dir web build
 `main` への push 時に GitHub Actions がビルドして GitHub Pages へデプロイします。
 Pull Request ではビルドまでを実行し、デプロイは行いません。
 
-### キーボードの辞書からの自動入力
+### キーボードの辞書と入力欄
 
-iOS のユーザ辞書（設定 > 一般 > キーボード > ユーザ辞書）によるテキスト置換や、
-日本語の予測変換バーからの確定は、WKWebView 上で `insertReplacementText` の `input` や
-`compositionend` として届きます。React の制御コンポーネントはこのとき `value` の再適用と
-タイミングが競合し、末尾の 1 文字が欠けたりカーソルが飛んだりすることがあります。
+トースト表示・端末機能の呼び出しの入力欄は、一時的なテキストを入れるだけなので
+キーボードの辞書や候補が邪魔になります。`web/app/hooks/use-dictionary-safe-input.ts` の
+`dictionaryOffInputProps`（`autocomplete` / `autocorrect` / `autocapitalize` / `spellcheck` を
+オフ）を `htmlInput` に渡し、ユーザ辞書のテキスト置換・自動補完・自動修正を切っています。
+iOS では `autocorrect="off"` がテキスト置換の自動展開（`insertReplacementText`）も抑止します。
 
-`web/app/hooks/use-dictionary-safe-input.ts` で、入力要素のネイティブ `input` /
-`compositionend` を直接購読し、実際の `element.value` を唯一の真実として state へ戻します
-（composition 中の中間 `input` は無視）。トースト表示と端末機能の呼び出しの入力欄で使用しています。
+一方、日本語の変換（かな→漢字）は `composition` として必ず通ります。WKWebView は
+未確定文字がある状態での確定時に `value` の再適用とタイミングが競合し、末尾の 1 文字が
+欠けたりカーソルが飛んだりすることがあるため、同フックが入力要素のネイティブ
+`input` / `compositionend` を直接購読し、実際の `element.value` を唯一の真実として
+state へ戻します（composition 中の中間 `input` は無視）。
 
 回帰テストは E2E（`e2e/src/webview.spec.ts` の「キーボードの辞書からの自動入力」、WebKit を含む
 5 ブラウザ）に加え、本物の WKWebView 上での確認を `WebViewBridgeTests.swift` にも用意しています

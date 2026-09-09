@@ -14,7 +14,7 @@ import SendIcon from '@mui/icons-material/Send';
 import SouthWestIcon from '@mui/icons-material/SouthWest';
 
 import { useBridge } from '../bridge-provider';
-import { useDictionarySafeInput } from '../hooks/use-dictionary-safe-input';
+import { dictionaryOffInputProps, useDictionarySafeInput } from '../hooks/use-dictionary-safe-input';
 import { monoFontFamily } from '../theme';
 import { SectionCard } from './section-card';
 
@@ -22,7 +22,7 @@ export function ToastCard() {
   const { hydrated, callNative, returnValue } = useBridge();
   const [message, setMessage] = useState('Hello from WebView!');
   const [longDuration, setLongDuration] = useState(false);
-  // iOS のユーザ辞書・予測変換による自動入力を取りこぼさないための同期
+  // 日本語 IME の変換確定などを取りこぼさないための同期（辞書系は下の htmlInput で無効化）
   const messageInput = useDictionarySafeInput(message, setMessage);
 
   const showToast = () => {
@@ -44,7 +44,7 @@ export function ToastCard() {
           value={message}
           onChange={messageInput.onChange}
           inputRef={messageInput.inputRef}
-          slotProps={{ htmlInput: { 'aria-label': 'トーストのメッセージ' } }}
+          slotProps={{ htmlInput: { ...dictionaryOffInputProps, 'aria-label': 'トーストのメッセージ' } }}
         />
         <Stack
           direction="row"
