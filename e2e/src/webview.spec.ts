@@ -459,11 +459,22 @@ test.describe('カラーテーマ', () => {
 });
 
 test.describe('キーボードの辞書からの自動入力', () => {
-  // iOS のユーザ辞書（テキスト置換）や日本語の予測変換で入る文字は、React の合成 onChange ではなく
-  // 要素のネイティブ input / compositionend として届く。web/app/hooks/use-dictionary-safe-input.ts が
-  // element.value を state に同期できているか（＝末尾を取りこぼさないか）を、送信引数で確かめる。
+  // 入力欄はユーザ辞書・自動補完・自動修正をオフにしている（dictionaryOffInputProps）。
+  // ただし日本語の変換（かな→漢字）は composition として通るため、その確定を
+  // web/app/hooks/use-dictionary-safe-input.ts が取りこぼさないことを送信引数で確かめる。
   const messageField = (page: Page) => page.getByRole('textbox', { name: 'トーストのメッセージ' });
   const eventLog = (page: Page) => page.getByRole('list', { name: 'イベントログ' });
+
+  test('should opt the input fields out of the keyboard dictionary', async ({ page }) => {
+    await openDemo(page);
+
+    for (const field of [messageField(page), page.getByRole('textbox', { name: 'テキスト' })]) {
+      await expect(field).toHaveAttribute('autocomplete', 'off');
+      await expect(field).toHaveAttribute('autocorrect', 'off');
+      await expect(field).toHaveAttribute('autocapitalize', 'off');
+      await expect(field).toHaveAttribute('spellcheck', 'false');
+    }
+  });
 
   test('should sync ordinary typing even though the React onChange is a no-op', async ({ page }) => {
     await openDemo(page);
@@ -477,14 +488,14 @@ test.describe('キーボードの辞書からの自動入力', () => {
     await expect(eventLog(page).getByText("showToast('やあ')")).toBeVisible();
   });
 
-  test('should sync a text-replacement expansion (insertReplacementText)', async ({ page }) => {
+  test('should still sync a text-replacement expansion if one slips through', async ({ page }) => {
     await openDemo(page);
 
     const field = messageField(page);
     await field.click();
     await field.fill('omw');
 
-    // WKWebView がユーザ辞書のテキスト置換を適用したときに出すイベントを再現する
+    // autocorrect="off" で実機では起きないが、万一 insertReplacementText が来ても取りこぼさない
     await field.evaluate((el: HTMLInputElement) => {
       el.value = 'On my way!';
       el.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', bubbles: true }));
