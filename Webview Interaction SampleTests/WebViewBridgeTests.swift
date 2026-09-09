@@ -158,6 +158,78 @@ struct WebViewBridgeTests {
         try await driver.waitUntil("配色の保存") { ThemePreference.load() == .light }
     }
 
+    /// iOS のユーザ辞書（テキスト置換）や日本語の予測変換で入る文字を、
+    /// 制御コンポーネントが取りこぼさないこと（`web/app/hooks/use-dictionary-safe-input.ts`）。
+    ///
+    /// キーボードのユーザ辞書登録や QuickType バーのタップは自動化できないため、
+    /// WKWebView がそれらの確定時に出す DOM イベント列を、実機シミュレータ上の
+    /// 本物の WebView へ流し込み、ネイティブへ渡る文言で同期を確かめる。
+    ///
+    /// `web/app/hooks/use-dictionary-safe-input.ts` を含む `web/` が本番へデプロイされるまで、
+    /// このテストが読み込む配信中のページには修正が入っていないため無効化している。
+    /// マージ後（GitHub Pages 反映後）に `.disabled` を外す。ローカルの `web/out` を
+    /// `serve` で配信し、`WebViewController.targetURL` を一時的にそこへ向ければ今でも緑になる。
+    @Test(.disabled("web/ の同期修正が本番へデプロイされるまで（マージ後に有効化）"))
+    func dictionaryAutoInput_isNotDroppedByTheControlledInput() async throws {
+        let driver = try await openDemo()
+        let token = String(UUID().uuidString.prefix(8))
+
+        let field = #"document.querySelector('input[aria-label="トーストのメッセージ"]')"#
+        let nativeSetter = "Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set"
+        let clickShowToast =
+            "Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Show Toast')).click()"
+
+        // ── 1. テキスト置換の自動展開（inputType: insertReplacementText）──
+        let replaced = "置換後 \(token)"
+        try await driver.run(
+            """
+            const el = \(field);
+            const set = \(nativeSetter);
+            el.focus();
+            set.call(el, 'zzz');
+            el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            set.call(el, \(driver.jsString(replaced)));
+            el.dispatchEvent(new InputEvent('input', { inputType: 'insertReplacementText', bubbles: true }));
+            """
+        )
+        try await driver.awaitTrue("展開後の値が入力欄に残る", "\(field).value === \(driver.jsString(replaced))")
+        try await driver.run(clickShowToast)
+        try await driver.waitUntil("展開後の文言がネイティブへ渡る") { driver.visibleToastMessage == replaced }
+        driver.capture("テキスト置換の展開")
+
+        // ── 2. 予測変換バーからの確定（composition）──
+        let base = "基準 \(token)"
+        let committed = "変換後 \(token)"
+        try await driver.run(
+            """
+            const el = \(field);
+            const set = \(nativeSetter);
+            el.focus();
+            set.call(el, \(driver.jsString(base)));
+            el.dispatchEvent(new InputEvent('input', { bubbles: true }));
+            el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+            set.call(el, \(driver.jsString(base + "へんかん")));
+            el.dispatchEvent(new InputEvent('input', { inputType: 'insertCompositionText', data: 'へんかん', bubbles: true }));
+            """
+        )
+        // 変換中：未確定の中間 input は state に入れない → 送信されるのは base のまま
+        try await driver.run(clickShowToast)
+        try await driver.waitUntil("変換中は基準の文言のまま") { driver.visibleToastMessage == base }
+
+        try await driver.run(
+            """
+            const el = \(field);
+            const set = \(nativeSetter);
+            set.call(el, \(driver.jsString(committed)));
+            el.dispatchEvent(new CompositionEvent('compositionend', { data: 'へんかん', bubbles: true }));
+            el.dispatchEvent(new InputEvent('input', { inputType: 'insertFromComposition', bubbles: true }));
+            """
+        )
+        try await driver.run(clickShowToast)
+        try await driver.waitUntil("確定後は変換後の文言がネイティブへ渡る") { driver.visibleToastMessage == committed }
+        driver.capture("予測変換の確定")
+    }
+
     @Test func reloadPage_reloadsTheWebView() async throws {
         let driver = try await openDemo()
 
